@@ -72,6 +72,11 @@ trait Writer extends Reader {
     set(idx, buf)
   }
 
+  def writeLong(l: Long, idx: Long, buf: Array[Byte]) = {
+    val ar = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).putLong(l)
+    set(idx, buf)
+  }
+
 }
 
 class InMemoryStorage extends Reader with Writer {

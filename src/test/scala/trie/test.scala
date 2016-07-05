@@ -35,14 +35,20 @@ class TrieSpec extends FunSpec with Matchers {
 
     describe("cnode storage " + name) {
       it("simple") {
-        val n1 = CNode(Array.fill(256)(0L), 113L, List[Byte](0, 1)).copy(address = 0L)
+        val n1 = CNode(Array.fill(256)(0L).updated(1, 13L), 113L, List[Byte](0, 1)).copy(address = 0L)
         val n2 = CNode(Array.fill(256)(0L), 114L, List[Byte](0, 1, 2, 3))
         val s = newstorage()
         val ns = new CNodeWriter(s)
         ns.append(n1)
         ns.read(0).get should equal(n1)
+        ns.readAddress(0, 1) should equal(13L)
+        ns.readPartial(0) should equal(PartialCNode(0, List[Byte](0, 1)))
         ns.append(n2)
         ns.read(0).get should equal(n1)
+        ns.updatePayload(n1, 3L)
+        ns.read(0).get should equal(n1.copy(payload = 3L))
+        ns.updateRoute(n1, 2, 3L)
+        ns.read(0).get should equal(n1.copy(payload = 3L, children = n1.children.updated(2, 3L)))
         // ns.read(2056).get should equal(n2)
         // ns.read(2057) should equal(None)
       }
@@ -127,14 +133,14 @@ class TrieSpec extends FunSpec with Matchers {
     }
 
     it("ctrie ") {
-      val data1 = 0 to 10000 map (i => 0 to 30 map (j => scala.util.Random.nextPrintableChar) mkString)
+      val data1 = 0 to 100000 map (i => 0 to 30 map (j => scala.util.Random.nextPrintableChar) mkString)
       val data = data1.zipWithIndex
         .map(x => x._1.getBytes("US-ASCII").toSeq -> x._2.toLong)
-      val s = {
-        val tmp = File.createTempFile("ctrie", "dfsd")
-        println(tmp)
+      val tmp = File.createTempFile("ctrie", "dfsd")
+      println(tmp)
+      val s =
         new FileWriter(tmp)
-      }
+
       val ns = new CNodeWriter(s)
       val t1 = System.nanoTime
       CTrie.build(data.iterator, ns)
@@ -151,7 +157,8 @@ class TrieSpec extends FunSpec with Matchers {
       CTrie.query(ns, "aaa".getBytes("US-ASCII").toSeq) should equal(None)
       CTrie.query(ns, "bba".getBytes("US-ASCII").toSeq) should equal(None)
       CTrie.query(ns, "bbb".getBytes("US-ASCII").toSeq) should equal(None)
-
+      println(tmp.length / 1024 / 1024)
+      tmp.delete
     }
   }
 }
