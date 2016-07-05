@@ -19,7 +19,20 @@ case class PartialCNode(
   prefix: Seq[Byte]
 )
 
-class CNodeReader(backing: Reader) {
+trait CNodeReader {
+  def read(i: Long): Option[CNode]
+  def readAddress(i: Long, b: Byte): Long
+  def readPartial(i: Long): PartialCNode
+}
+
+trait CNodeWriter extends CNodeReader {
+  def write(n: CNode): Unit
+  def updatePayload(old: CNode, n: Long): Unit
+  def updateRoute(old: CNode, b: Byte, a: Long): Unit
+  def append(n: CNode): CNode
+}
+
+class SimpleCNodeReader(backing: Reader) extends CNodeReader {
   val bufInt = Array.fill[Byte](4)(0)
   val bufLong = Array.fill[Byte](8)(0)
   val bufLongs = Array.fill[Byte](257 * 8)(0)
@@ -50,7 +63,8 @@ class CNodeReader(backing: Reader) {
   }
 }
 
-class CNodeWriter(backing: Writer) extends CNodeReader(backing) {
+class SimpleCNodeWriter(backing: Writer) extends SimpleCNodeReader(backing)
+    with CNodeWriter {
   def write(n: CNode) = {
     val values = n.payload +: n.children
     val raw = Conversions.toArray(values, bufLongs)

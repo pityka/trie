@@ -84,7 +84,7 @@ class InMemoryStorage extends Reader with Writer {
   var size = 0L
   def set(i: Long, v: Array[Byte]) = {
     val ii = i.toInt
-    if (backing.size <= ii) {
+    if (backing.size <= ii + v.size) {
       backing.appendAll(ArrayBuffer.fill[Byte](ii - backing.size + v.size)(0))
     }
     v.zipWithIndex.foreach {
