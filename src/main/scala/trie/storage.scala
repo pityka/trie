@@ -3,20 +3,20 @@ package trie
 import scala.collection.mutable.ArrayBuffer
 import java.nio.{ ByteBuffer, ByteOrder }
 
-object Conversions {
-  def fromArray(buf: Array[Byte], len: Int): Seq[Long] = {
-    val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-    0 until len map { i =>
-      bb.getLong
-    }
-  }
-
-  def toArray(l: Seq[Long], buf: Array[Byte]) = {
-    val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-    l.foreach(l => bb.putLong(l))
-    buf
-  }
-}
+// object Conversions {
+//   def fromArray(buf: Array[Byte], len: Int): Seq[Long] = {
+//     val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
+//     0 until len map { i =>
+//       bb.getLong
+//     }
+//   }
+//
+//   def toArray(l: Seq[Long], buf: Array[Byte]) = {
+//     val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
+//     l.foreach(l => bb.putLong(l))
+//     buf
+//   }
+// }
 
 // object ConversionsSnappy {
 //   def fromArray(buf: Array[Byte], len: Int): Seq[Long] = {

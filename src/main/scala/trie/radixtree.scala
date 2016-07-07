@@ -32,58 +32,58 @@ trait CNodeWriter extends CNodeReader {
   def append(n: CNode): CNode
 }
 
-class SimpleCNodeReader(backing: Reader) extends CNodeReader {
-  val bufInt = Array.fill[Byte](4)(0)
-  val bufLong = Array.fill[Byte](8)(0)
-  val bufLongs = Array.fill[Byte](257 * 8)(0)
-  val bufLongs2 = Array.fill[Byte](256 * 8)(0)
-
-  def read(i: Long): Option[CNode] = {
-    if (backing.size >= i + 4) {
-      val recordSize = backing.readInt(i, bufInt)
-      val ar = Array.ofDim[Byte](recordSize)
-      backing.get(i + 4, ar)
-      val values = Conversions.fromArray(ar, 257)
-      val payload = values.head
-      val children = values.drop(1)
-      val prefix = ar.slice(257 * 8, ar.size)
-      Some(CNode(i, children.toArray, payload, prefix))
-    } else None
-  }
-
-  def readAddress(i: Long, b: Byte): Long = {
-    backing.readLong(i + 4 + 8 + b.toInt * 8, bufLong)
-  }
-
-  def readPartial(i: Long): PartialCNode = {
-    val recordSize = backing.readInt(i, bufInt)
-    val ar = Array.ofDim[Byte](recordSize - 257 * 8)
-    backing.get(i + 4 + 257 * 8, ar)
-    PartialCNode(i, ar.toSeq)
-  }
-}
-
-class SimpleCNodeWriter(backing: Writer) extends SimpleCNodeReader(backing)
-    with CNodeWriter {
-  def write(n: CNode) = {
-    val values = n.payload +: n.children
-    val raw = Conversions.toArray(values, bufLongs)
-    backing.writeInt(raw.size + n.prefix.size, n.address, bufInt)
-    backing.set(n.address + 4, raw)
-    backing.set(n.address + 4 + raw.size, n.prefix.toArray)
-  }
-  def updatePayload(old: CNode, n: Long) = {
-    backing.writeLong(n, old.address + 4, bufLong)
-  }
-  def updateRoute(old: CNode, b: Byte, a: Long) = {
-    backing.writeLong(a, old.address + 4 + 8 + b.toInt * 8, bufLong)
-  }
-  def append(n: CNode) = {
-    val m = n.copy(address = backing.size)
-    write(m)
-    m
-  }
-}
+// class SimpleCNodeReader(backing: Reader) extends CNodeReader {
+//   val bufInt = Array.fill[Byte](4)(0)
+//   val bufLong = Array.fill[Byte](8)(0)
+//   val bufLongs = Array.fill[Byte](257 * 8)(0)
+//   val bufLongs2 = Array.fill[Byte](256 * 8)(0)
+//
+//   def read(i: Long): Option[CNode] = {
+//     if (backing.size >= i + 4) {
+//       val recordSize = backing.readInt(i, bufInt)
+//       val ar = Array.ofDim[Byte](recordSize)
+//       backing.get(i + 4, ar)
+//       val values = Conversions.fromArray(ar, 257)
+//       val payload = values.head
+//       val children = values.drop(1)
+//       val prefix = ar.slice(257 * 8, ar.size)
+//       Some(CNode(i, children.toArray, payload, prefix))
+//     } else None
+//   }
+//
+//   def readAddress(i: Long, b: Byte): Long = {
+//     backing.readLong(i + 4 + 8 + b.toInt * 8, bufLong)
+//   }
+//
+//   def readPartial(i: Long): PartialCNode = {
+//     val recordSize = backing.readInt(i, bufInt)
+//     val ar = Array.ofDim[Byte](recordSize - 257 * 8)
+//     backing.get(i + 4 + 257 * 8, ar)
+//     PartialCNode(i, ar.toSeq)
+//   }
+// }
+//
+// class SimpleCNodeWriter(backing: Writer) extends SimpleCNodeReader(backing)
+//     with CNodeWriter {
+//   def write(n: CNode) = {
+//     val values = n.payload +: n.children
+//     val raw = Conversions.toArray(values, bufLongs)
+//     backing.writeInt(raw.size + n.prefix.size, n.address, bufInt)
+//     backing.set(n.address + 4, raw)
+//     backing.set(n.address + 4 + raw.size, n.prefix.toArray)
+//   }
+//   def updatePayload(old: CNode, n: Long) = {
+//     backing.writeLong(n, old.address + 4, bufLong)
+//   }
+//   def updateRoute(old: CNode, b: Byte, a: Long) = {
+//     backing.writeLong(a, old.address + 4 + 8 + b.toInt * 8, bufLong)
+//   }
+//   def append(n: CNode) = {
+//     val m = n.copy(address = backing.size)
+//     write(m)
+//     m
+//   }
+// }
 
 object CTrie {
 
