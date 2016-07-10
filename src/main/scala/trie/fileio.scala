@@ -9,32 +9,58 @@ object FileWriter {
   def open(f: File) = new FileWriter(FileChannel.open(f.toPath, READ, WRITE))
 }
 
-class FileWriter(fc: FileChannel) extends FileReader(fc) with Writer {
+class FileWriter(fc: FileChannel) extends FileReader(fc) with JWriter {
   def set(i: Long, v: Array[Byte]) = {
-    val bb = ByteBuffer.wrap(v)
-    fc.write(bb, i)
+    // val bb = ByteBuffer.wrap(v)
+    remap(i, v.size)
+
+    map.position((i - mapStart).toInt)
+    map.put(v)
+    // fc.write(bb, i)
     if (i + v.size > fileSize) {
       fileSize = i + v.size
     }
   }
+  def close = {
+    map.force
+    fc.truncate(size)
+    fc.close
+  }
   override def toString = "FileWriter(" + fc + ")"
 }
-class FileReader(fc: FileChannel) extends Reader {
-  var map = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size.toLong)
+
+object FileReader {
+  def open(f: File) = new FileReader(FileChannel.open(f.toPath, READ, WRITE))
+}
+
+class FileReader(fc: FileChannel) extends JReader {
+  var map = fc.map(FileChannel.MapMode.READ_WRITE, 0, fc.size.toLong)
   var mapStart = 0L
   var mapSize = fc.size.toLong
   var fileSize = fc.size
   def size = fileSize
-  def get(i: Long, buf: Array[Byte]) = {
-    if (i < mapStart || i + buf.size > mapStart + mapSize) {
-      val size = if (fc.size - i > Int.MaxValue.toLong) Int.MaxValue.toLong
-      else fc.size - i
-      map = fc.map(FileChannel.MapMode.READ_ONLY, i, size)
-      mapStart = i
-      mapSize = size
+  def remap(i: Long, size: Int): Unit = {
+    if (i < mapStart || i + size > mapStart + mapSize) {
+      val size2 = math.max(size, 1024 * 1024)
+      val (mStart, mSize) =
+        if (fc.size - i > Int.MaxValue.toLong) (i, Int.MaxValue.toLong)
+        else {
+          val end = math.max(i + size2, fc.size)
+          val s = math.max(0, end - Int.MaxValue)
+
+          (s, end - s)
+        }
+      // println(mStart -> mSize)
+      map = fc.map(FileChannel.MapMode.READ_WRITE, mStart, mSize)
+      mapStart = mStart
+      mapSize = mSize
     }
+  }
+
+  def get(i: Long, buf: Array[Byte], s: Int, l: Int) = {
+    remap(i, l)
     map.position((i - mapStart).toInt)
-    map.get(buf)
+    map.get(buf, s, l)
   }
   override def toString = "FileReader(" + fc + ")"
 }

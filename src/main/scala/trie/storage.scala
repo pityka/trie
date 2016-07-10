@@ -3,57 +3,34 @@ package trie
 import scala.collection.mutable.ArrayBuffer
 import java.nio.{ ByteBuffer, ByteOrder }
 
-// object Conversions {
-//   def fromArray(buf: Array[Byte], len: Int): Seq[Long] = {
-//     val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-//     0 until len map { i =>
-//       bb.getLong
-//     }
-//   }
-//
-//   def toArray(l: Seq[Long], buf: Array[Byte]) = {
-//     val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-//     l.foreach(l => bb.putLong(l))
-//     buf
-//   }
-// }
-
-// object ConversionsSnappy {
-//   def fromArray(buf: Array[Byte], len: Int): Seq[Long] = {
-//     val uncompressed = Snappy.uncompress(buf)
-//     val bb = ByteBuffer.wrap(uncompressed).order(ByteOrder.LITTLE_ENDIAN)
-//     0 until len map { i =>
-//       bb.getLong
-//     }
-//   }
-//
-//   def toArray(l: Seq[Long], buf: Array[Byte]) = {
-//     val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-//     l.foreach(l => bb.putLong(l))
-//     Snappy.compress(buf)
-//   }
-// }
-
 trait Reader {
+
+  def get(i: Long, buf: Array[Byte], start: Int, len: Int)
   def get(i: Long, buf: Array[Byte]): Unit
   def size: Long
 
-  def readLongs(idx: Long, buf: Array[Byte]): Seq[Long] = {
-    get(idx, buf)
-    val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-    0 until (buf.size / 8) map { i =>
-      bb.getLong
-    }
+  def readInt(idx: Long): Int
+  def readLong(idx: Long): Long
+}
+
+trait JReader extends Reader {
+
+  def get(i: Long, buf: Array[Byte], start: Int, len: Int)
+  def size: Long
+
+  val intBuffer = Array.ofDim[Byte](4)
+  val longBuffer = Array.ofDim[Byte](8)
+
+  def get(i: Long, buf: Array[Byte]): Unit = get(i, buf, 0, buf.size)
+
+  def readInt(idx: Long) = {
+    get(idx, intBuffer)
+    ByteBuffer.wrap(intBuffer).order(ByteOrder.LITTLE_ENDIAN).getInt
   }
 
-  def readInt(idx: Long, buf: Array[Byte]) = {
-    get(idx, buf)
-    ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).getInt
-  }
-
-  def readLong(idx: Long, buf: Array[Byte]) = {
-    get(idx, buf)
-    ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).getLong
+  def readLong(idx: Long) = {
+    get(idx, longBuffer)
+    ByteBuffer.wrap(longBuffer).order(ByteOrder.LITTLE_ENDIAN).getLong
   }
 
 }
@@ -61,25 +38,32 @@ trait Reader {
 trait Writer extends Reader {
   def set(i: Long, v: Array[Byte]): Unit
 
-  def writeLongs(l: Seq[Long], idx: Long, buf: Array[Byte]) = {
-    val bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-    l.foreach(l => bb.putLong(l))
-    set(idx, buf)
+  def close: Unit
+
+  def writeInt(l: Int, idx: Long)
+
+  def writeLong(l: Long, idx: Long)
+
+}
+
+trait JWriter extends JReader with Writer {
+  def set(i: Long, v: Array[Byte]): Unit
+
+  def close: Unit
+
+  def writeInt(l: Int, idx: Long) = {
+    val ar = ByteBuffer.wrap(intBuffer).order(ByteOrder.LITTLE_ENDIAN).putInt(l)
+    set(idx, intBuffer)
   }
 
-  def writeInt(l: Int, idx: Long, buf: Array[Byte]) = {
-    val ar = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).putInt(l)
-    set(idx, buf)
-  }
-
-  def writeLong(l: Long, idx: Long, buf: Array[Byte]) = {
-    val ar = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN).putLong(l)
-    set(idx, buf)
+  def writeLong(l: Long, idx: Long) = {
+    val ar = ByteBuffer.wrap(longBuffer).order(ByteOrder.LITTLE_ENDIAN).putLong(l)
+    set(idx, longBuffer)
   }
 
 }
 
-class InMemoryStorage extends Reader with Writer {
+class InMemoryStorage extends JReader with JWriter {
   val backing = ArrayBuffer[Byte]()
   var size = 0L
   def set(i: Long, v: Array[Byte]) = {
@@ -93,9 +77,10 @@ class InMemoryStorage extends Reader with Writer {
     }
     size = math.max(i.toInt + v.size, size)
   }
-  def get(i: Long, buf: Array[Byte]) = {
-    val tmp = backing.slice(i.toInt, buf.size + i.toInt).toArray
-    System.arraycopy(tmp, 0, buf, 0, tmp.size)
+  def get(i: Long, buf: Array[Byte], s: Int, l: Int) = {
+    val tmp = backing.slice(i.toInt, l + i.toInt).toArray
+    System.arraycopy(tmp, 0, buf, s, tmp.size)
   }
   override def toString = backing.toString
+  def close = ()
 }
