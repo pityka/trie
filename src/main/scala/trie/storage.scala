@@ -5,28 +5,45 @@ import java.nio.{ ByteBuffer, ByteOrder }
 
 trait Reader {
 
-  def get(i: Long, buf: Array[Byte], start: Int, len: Int)
-  def get(i: Long, buf: Array[Byte]): Unit
   def size: Long
-
   def readInt(idx: Long): Int
   def readLong(idx: Long): Long
+  def readByte(idx: Long): Byte
+  def readBytes(idx: Long, size: Int): Array[Byte]
+  def readBytesInto(i: Long, buf: Array[Byte], start: Int, len: Int)
+}
+
+trait Writer extends Reader {
+  def set(i: Long, v: Array[Byte]): Unit
+  def close: Unit
+  def writeLong(l: Long, idx: Long)
 }
 
 trait JReader extends Reader {
 
+  def get(i: Long): Byte
   def get(i: Long, buf: Array[Byte], start: Int, len: Int)
+  def get(i: Long, buf: Array[Byte]): Unit = get(i, buf, 0, buf.size)
+
   def size: Long
 
   val intBuffer = Array.ofDim[Byte](4)
   val longBuffer = Array.ofDim[Byte](8)
 
-  def get(i: Long, buf: Array[Byte]): Unit = get(i, buf, 0, buf.size)
+  def readBytes(idx: Long, size: Int) = {
+    val ar = Array.ofDim[Byte](size)
+    get(idx, ar)
+    ar
+  }
 
   def readInt(idx: Long) = {
     get(idx, intBuffer)
     ByteBuffer.wrap(intBuffer).order(ByteOrder.LITTLE_ENDIAN).getInt
   }
+
+  def readByte(idx: Long) = get(idx)
+
+  def readBytesInto(i: Long, buf: Array[Byte], start: Int, len: Int) = get(i, buf, start, len)
 
   def readLong(idx: Long) = {
     get(idx, longBuffer)
@@ -35,26 +52,10 @@ trait JReader extends Reader {
 
 }
 
-trait Writer extends Reader {
-  def set(i: Long, v: Array[Byte]): Unit
-
-  def close: Unit
-
-  def writeInt(l: Int, idx: Long)
-
-  def writeLong(l: Long, idx: Long)
-
-}
-
 trait JWriter extends JReader with Writer {
   def set(i: Long, v: Array[Byte]): Unit
 
   def close: Unit
-
-  def writeInt(l: Int, idx: Long) = {
-    val ar = ByteBuffer.wrap(intBuffer).order(ByteOrder.LITTLE_ENDIAN).putInt(l)
-    set(idx, intBuffer)
-  }
 
   def writeLong(l: Long, idx: Long) = {
     val ar = ByteBuffer.wrap(longBuffer).order(ByteOrder.LITTLE_ENDIAN).putLong(l)
@@ -77,6 +78,7 @@ class InMemoryStorage extends JReader with JWriter {
     }
     size = math.max(i.toInt + v.size, size)
   }
+  def get(i: Long): Byte = backing(i.toInt)
   def get(i: Long, buf: Array[Byte], s: Int, l: Int) = {
     val tmp = backing.slice(i.toInt, l + i.toInt).toArray
     System.arraycopy(tmp, 0, buf, s, tmp.size)

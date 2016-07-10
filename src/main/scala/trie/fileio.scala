@@ -11,12 +11,10 @@ object FileWriter {
 
 class FileWriter(fc: FileChannel) extends FileReader(fc) with JWriter {
   def set(i: Long, v: Array[Byte]) = {
-    // val bb = ByteBuffer.wrap(v)
     remap(i, v.size)
 
     map.position((i - mapStart).toInt)
     map.put(v)
-    // fc.write(bb, i)
     if (i + v.size > fileSize) {
       fileSize = i + v.size
     }
@@ -61,6 +59,11 @@ class FileReader(fc: FileChannel) extends JReader {
     remap(i, l)
     map.position((i - mapStart).toInt)
     map.get(buf, s, l)
+  }
+  def get(i: Long): Byte = {
+    remap(i, 1)
+    map.position((i - mapStart).toInt)
+    map.get
   }
   override def toString = "FileReader(" + fc + ")"
 }

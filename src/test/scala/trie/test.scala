@@ -11,10 +11,12 @@ class TrieSpec extends FunSpec with Matchers {
       it("simple") {
         val s = newstorage()
         s.set(5, Array[Byte](0, 1, 2, 3, 4))
-        val buf = Array.ofDim[Byte](10)
-        s.get(0, buf)
+        val buf = s.readBytes(0, 10)
         buf.toVector should equal(List[Byte](0, 0, 0, 0, 0, 0, 1, 2, 3, 4))
+        s.readBytesInto(6, buf, 0, 3)
+        buf.toVector should equal(List[Byte](1, 2, 3, 0, 0, 0, 1, 2, 3, 4))
         s.size should equal(10)
+        s.readByte(6) should equal(1.toByte)
       }
     }
 
@@ -46,7 +48,6 @@ class TrieSpec extends FunSpec with Matchers {
     }
 
     describe("catrie " + name) {
-      val buf = Array.ofDim[Byte](2)
       it("write+query small") {
         val data = List("aaa" -> 0L, "a" -> 1L, "aa" -> 3L, "b" -> 2L, "bb" -> 4L, "ab" -> 5L, "aba" -> 6L, "abb" -> 7L, "tester" -> 8L, "test" -> 9L, "team" -> 10L, "toast" -> 11L)
           .map(x => x._1.getBytes("US-ASCII").toVector -> x._2)
@@ -71,94 +72,113 @@ class TrieSpec extends FunSpec with Matchers {
   }
 
   tests(() => new InMemoryStorage, "inmemory")
-  // tests(() => {
-  //   val tmp = File.createTempFile("dfs", "dfsd")
-  //   FileWriter.open(tmp)
-  // }, "file")
+  tests(() => {
+    val tmp = File.createTempFile("dfs", "dfsd")
+    FileWriter.open(tmp)
+  }, "file")
+  tests(() => {
+    val tmp = File.createTempFile("dfs", "dfsd")
+    println(tmp)
+    new LFileWriter(tmp)
+  }, "lfile")
 
-  describe("big") {
+  def bigTest(openWriter: (File) => Writer, openReader: File => Reader, name: String) = {
+    describe("big") {
 
-    it("kmer") {
-      def kmer(i: Int, c: List[Byte], acc: List[Vector[Byte]]): List[Vector[Byte]] =
-        if (i == 0) acc
-        else kmer(i - 1, c, c.flatMap(c => acc.map(v => v :+ c)))
+      it("kmer" + name) {
+        def kmer(i: Int, c: List[Byte], acc: List[Vector[Byte]]): List[Vector[Byte]] =
+          if (i == 0) acc
+          else kmer(i - 1, c, c.flatMap(c => acc.map(v => v :+ c)))
 
-      val buf = Array.ofDim[Byte](50)
-      val alphabet = List('a', 'b', 'c', 'd').map(_.toByte)
-      val data = kmer(10, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
-      println("kmers size: " + data.size)
-      val tmp = File.createTempFile("catrie", "dfsd")
-      println(tmp)
-      val s = FileWriter.open(tmp)
+        val buf = Array.ofDim[Byte](50)
+        val alphabet = List('a', 'b', 'c', 'd').map(_.toByte)
+        val data = kmer(10, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
+        println("kmers size: " + data.size)
+        val tmp = File.createTempFile("catrie", "dfsd")
+        println(tmp)
+        val s = openWriter(tmp) //FileWriter.open(tmp)
 
-      val ns = new CANodeWriter(s)
-      val t1 = System.nanoTime
-      CTrie.build(data.iterator, ns)
-      s.close
-      println((System.nanoTime - t1) / 1E9)
-
-      val s2 = FileReader.open(tmp)
-      val ns2 = new CANodeReader(s2)
-      val ts = data.map {
-        case (k, v) =>
-          val t1 = System.nanoTime
-          CTrie.query(ns2, k) should equal(Some(v))
-          (System.nanoTime - t1) / 1E9
-      }.toVector
-      println(ts.sorted.apply(ts.size / 2))
-      println(ts.sorted.apply((ts.size * 0.25).toInt))
-      println(ts.sorted.apply((ts.size * 0.75).toInt))
-      println(ts.min)
-      println(ts.zipWithIndex.maxBy(_._1))
-      val max = data(ts.zipWithIndex.maxBy(_._1)._2)._1
-      val tmax = 0 until 10000 map { i =>
+        val ns = new CANodeWriter(s)
         val t1 = System.nanoTime
-        CTrie.query(ns2, max)
-        (System.nanoTime - t1) / 1E9
-      }
-      println(tmax.min + " " + tmax.sorted.apply(5000) + " " + tmax.max)
-      println(tmp.length / 1024 / 1024)
-      tmp.delete
-    }
+        CTrie.build(data.iterator, ns)
+        s.close
+        println(name + " " + (System.nanoTime - t1) / 1E9)
 
-    it("random ") {
-      val buf = Array.ofDim[Byte](50)
-
-      def data = {
-        val rnd = new scala.util.Random(1)
-        (0 to 1000000 iterator).map(i => 0 to 30 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
-          .map(x => x._1.getBytes("US-ASCII").toVector -> x._2.toLong)
-      }
-      val tmp = File.createTempFile("catrie", "dfsd")
-      println(tmp)
-      val s = FileWriter.open(tmp)
-
-      val ns = new CANodeWriter(s)
-      val t1 = System.nanoTime
-      CTrie.build(data, ns)
-      s.close
-      println((System.nanoTime - t1) / 1E9)
-
-      val s2 = FileReader.open(tmp)
-      val ns2 = new CANodeReader(s2)
-      val ts = data.map {
-        case (k, v) =>
+        val s2 = openReader(tmp) //FileReader.open(tmp)
+        val ns2 = new CANodeReader(s2)
+        val ts = data.map {
+          case (k, v) =>
+            val t1 = System.nanoTime
+            CTrie.query(ns2, k) should equal(Some(v))
+            (System.nanoTime - t1) / 1E9
+        }.toVector
+        println(name + " " + ts.sorted.apply(ts.size / 2))
+        println(name + " " + ts.sorted.apply((ts.size * 0.25).toInt))
+        println(name + " " + ts.sorted.apply((ts.size * 0.75).toInt))
+        println(name + " " + ts.min)
+        println(name + " " + ts.zipWithIndex.maxBy(_._1))
+        val max = data(ts.zipWithIndex.maxBy(_._1)._2)._1
+        val tmax = 0 until 10000 map { i =>
           val t1 = System.nanoTime
-          CTrie.query(ns2, k) should equal(Some(v))
+          CTrie.query(ns2, max)
           (System.nanoTime - t1) / 1E9
-      }.toVector
-      println(ts.sorted.apply(ts.size / 2))
-      println(ts.sorted.apply((ts.size * 0.25).toInt))
-      println(ts.sorted.apply((ts.size * 0.75).toInt))
-      println(ts.min)
-      println(ts.zipWithIndex.maxBy(_._1))
-      CTrie.query(ns2, "abc".getBytes("US-ASCII").toVector) should equal(None)
-      CTrie.query(ns2, "c".getBytes("US-ASCII").toVector) should equal(None)
-      CTrie.query(ns2, "aaa".getBytes("US-ASCII").toVector) should equal(None)
-      CTrie.query(ns2, "bba".getBytes("US-ASCII").toVector) should equal(None)
-      CTrie.query(ns2, "bbb".getBytes("US-ASCII").toVector) should equal(None)
-      println(tmp.length / 1024 / 1024)
-      tmp.delete
+        }
+        println(name + " " + tmax.min + " " + tmax.sorted.apply(5000) + " " + tmax.max)
+        println(name + " " + tmp.length / 1024 / 1024)
+        tmp.delete
+      }
+
+      it("random " + name) {
+        val buf = Array.ofDim[Byte](50)
+
+        def data = {
+          val rnd = new scala.util.Random(1)
+          (0 to 1000000 iterator).map(i => 0 to 30 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
+            .map(x => x._1.getBytes("US-ASCII").toVector -> x._2.toLong)
+        }
+        val tmp = File.createTempFile("catrie", "dfsd")
+        println(tmp)
+        val s = openWriter(tmp)
+
+        val ns = new CANodeWriter(s)
+        val t1 = System.nanoTime
+        CTrie.build(data, ns)
+        s.close
+        println(name + " " + (System.nanoTime - t1) / 1E9)
+
+        val s2 = openReader(tmp) 
+        val ns2 = new CANodeReader(s2)
+        val ts = data.map {
+          case (k, v) =>
+            val t1 = System.nanoTime
+            CTrie.query(ns2, k) should equal(Some(v))
+            (System.nanoTime - t1) / 1E9
+        }.toVector
+        println(name + " " + ts.sorted.apply(ts.size / 2))
+        println(name + " " + ts.sorted.apply((ts.size * 0.25).toInt))
+        println(name + " " + ts.sorted.apply((ts.size * 0.75).toInt))
+        println(name + " " + ts.min)
+        println(name + " " + ts.zipWithIndex.maxBy(_._1))
+        CTrie.query(ns2, "abc".getBytes("US-ASCII").toVector) should equal(None)
+        CTrie.query(ns2, "c".getBytes("US-ASCII").toVector) should equal(None)
+        CTrie.query(ns2, "aaa".getBytes("US-ASCII").toVector) should equal(None)
+        CTrie.query(ns2, "bba".getBytes("US-ASCII").toVector) should equal(None)
+        CTrie.query(ns2, "bbb".getBytes("US-ASCII").toVector) should equal(None)
+        println(tmp.length / 1024 / 1024)
+        tmp.delete
+      }
     }
   }
+
+  bigTest(
+    (f: File) => FileWriter.open(f),
+    (f: File) => FileReader.open(f),
+    "nio"
+  )
+
+  bigTest(
+    (f: File) => new LFileWriter(f),
+    (f: File) => new LFileReader(f),
+    "larray"
+  )
 }
