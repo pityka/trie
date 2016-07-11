@@ -1,2 +1,2 @@
 # trie
-disk based prefix trie, scala
+disk based radix tree written in scala

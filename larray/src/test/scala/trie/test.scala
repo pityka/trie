@@ -146,7 +146,7 @@ class TrieSpec extends FunSpec with Matchers {
         s.close
         println(name + " " + (System.nanoTime - t1) / 1E9)
 
-        val s2 = openReader(tmp) 
+        val s2 = openReader(tmp)
         val ns2 = new CANodeReader(s2)
         val ts = data.map {
           case (k, v) =>

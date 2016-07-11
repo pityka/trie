@@ -33,7 +33,7 @@ class LFileWriter(f: File) extends LFileReader(f) with Writer {
 }
 class LFileReader(f: File) extends Reader {
 
-  /* this is a mmap > 4gb */ 
+  /* this is a mmap > 4gb */
   var map = new MMapBuffer(f, MMapMode.READ_WRITE)
 
   var mapStart = 0L
