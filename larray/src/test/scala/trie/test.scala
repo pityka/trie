@@ -93,8 +93,10 @@ class TrieSpec extends FunSpec with Matchers {
           else kmer(i - 1, c, c.flatMap(c => acc.map(v => v :+ c)))
 
         val buf = Array.ofDim[Byte](50)
-        val alphabet = List('a', 'b', 'c', 'd').map(_.toByte)
-        val data = kmer(10, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
+        val alphabet = List('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j').map(_.toByte)
+        val data = kmer(6, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
+        val data1 = scala.util.Random.shuffle(data)
+        val data2 = scala.util.Random.shuffle(data)
         println("kmers size: " + data.size)
         val tmp = File.createTempFile("catrie", "dfsd")
         println(tmp)
@@ -102,16 +104,16 @@ class TrieSpec extends FunSpec with Matchers {
 
         val ns = new CANodeWriter(s)
         val t1 = System.nanoTime
-        CTrie.build(data.iterator, ns)
+        CTrie.build(data1.iterator, ns)
         s.close
         println(name + " " + (System.nanoTime - t1) / 1E9)
 
         val s2 = openReader(tmp) //FileReader.open(tmp)
         val ns2 = new CANodeReader(s2)
-        val ts = data.map {
+        val ts = data2.map {
           case (k, v) =>
             val t1 = System.nanoTime
-            CTrie.query(ns2, k) should equal(Some(v))
+            CTrie.prefixPayload(ns2, k) should equal(Vector(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
         println(name + " " + ts.sorted.apply(ts.size / 2))
@@ -178,9 +180,9 @@ class TrieSpec extends FunSpec with Matchers {
     "nio"
   )
 
-  bigTest(
-    (f: File) => new LFileWriter(f),
-    (f: File) => new LFileReader(f),
-    "larray"
-  )
+  // bigTest(
+  //   (f: File) => new LFileWriter(f),
+  //   (f: File) => new LFileReader(f),
+  //   "larray"
+  // )
 }
