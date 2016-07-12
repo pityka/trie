@@ -64,6 +64,8 @@ class TrieSpec extends FunSpec with Matchers {
         CTrie.query(ns, "bba".getBytes("US-ASCII").toVector) should equal(None)
         CTrie.query(ns, "bbb".getBytes("US-ASCII").toVector) should equal(None)
         CTrie.prefixPayload(ns, "a".toVector.map(_.toByte)).toSet should equal(Set(0l, 1L, 3L, 7L, 6L, 5L))
+        CTrie.prefixPayload(ns, "z".toVector.map(_.toByte)).toSet should equal(Set())
+        CTrie.prefixPayload(ns, "tes".toVector.map(_.toByte)).toSet should equal(Set(8L, 9L))
 
       }
 

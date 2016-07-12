@@ -102,7 +102,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
 
 class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWriter {
 
-  def writePointers(bb: ByteBuffer, start: Int, pointers: ArrayBuffer[(Byte, Long)]): Unit = {
+  def writePointers(bb: ByteBuffer, start: Int, pointers: ArrayBuffer[(Byte, Long)], address: Long): Unit = {
 
     val s = if (pointers.size - start > GroupSize) GroupSize else pointers.size - start
     bb.put(s.toByte)
@@ -114,10 +114,10 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
     }
     if (pointers.size - start - s <= 0) bb.putLong(-1L)
     else {
-      val next = backing.size
+      val next = math.max(backing.size, address)
       bb.putLong(next)
       val bb2 = ByteBuffer.wrap(pointerRecordBuffer).order(ByteOrder.LITTLE_ENDIAN)
-      writePointers(bb2, start + s, pointers)
+      writePointers(bb2, start + s, pointers, next + PointerRecordSize)
       backing.set(next, pointerRecordBuffer)
     }
 
@@ -141,7 +141,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
       }
       buf
     }
-    writePointers(bb, 0, ch)
+    writePointers(bb, 0, ch, n.address + PointerRecordSize)
     n.prefix.foreach(b => bb.put(b))
     backing.set(n.address, ar)
   }
@@ -161,7 +161,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
           else {
             val nidx = backing.size
             val bb = ByteBuffer.wrap(pointerRecordBuffer).order(ByteOrder.LITTLE_ENDIAN)
-            writePointers(bb, 0, ArrayBuffer(b -> a))
+            writePointers(bb, 0, ArrayBuffer(b -> a), nidx)
             backing.set(nidx, pointerRecordBuffer)
             backing.writeLong(nidx, idx + 1 + GroupSize + GroupSize * 8)
           }
