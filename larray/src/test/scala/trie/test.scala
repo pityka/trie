@@ -78,6 +78,11 @@ class TrieSpec extends FunSpec with Matchers {
     val tmp = File.createTempFile("dfs", "dfsd")
     FileWriter.open(tmp)
   }, "file")
+  tests(() => {
+    val tmp = File.createTempFile("dfs", "dfsd")
+    println(tmp)
+    new LFileWriter(tmp)
+  }, "lfile")
 
   def bigTest(openWriter: (File) => Writer, openReader: File => Reader, name: String) = {
     describe("big") {
@@ -175,4 +180,9 @@ class TrieSpec extends FunSpec with Matchers {
     "nio"
   )
 
+  // bigTest(
+  //   (f: File) => new LFileWriter(f),
+  //   (f: File) => new LFileReader(f),
+  //   "larray"
+  // )
 }

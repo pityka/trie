@@ -15,3 +15,13 @@ lazy val core = project.in(file(".")).
       libraryDependencies ++= Seq(
         "org.scalatest" %% "scalatest" % "2.1.5" % "test"
 		))
+
+lazy val larray = project.in(file("larray")).
+  settings(commonSettings).
+  settings(
+    name:="trie-larray",
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % "2.1.5" % "test",
+      "org.xerial.larray" %% "larray" % "0.3.4"
+    )
+  ).dependsOn(core)
