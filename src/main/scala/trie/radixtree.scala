@@ -106,8 +106,10 @@ object CTrie {
   def prefixPayload(trie: CNodeReader, q: Vector[Byte]): Vector[Long] = {
     val first = queryNode(trie, q)
     first match {
-      case Left((node, p)) => if (p.startsWith(q)) childrenPayload(trie, node.address) else Vector()
-      case Right((node, pl)) => childrenPayload(trie, node.address)
+      case Left((node, p)) =>
+        if (p.startsWith(q)) node.payload +: node.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
+        else Vector()
+      case Right((node, pl)) => node.payload +: node.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
     }
   }
 
