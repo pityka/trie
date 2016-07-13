@@ -1,7 +1,7 @@
 package trie
 import java.nio.{ ByteBuffer, ByteOrder }
 import scala.collection.mutable.ArrayBuffer
-// |recordsize,4|value,8|pointers|prefix|
+// |recordsize,4|value,8|next pointer,8|prefix|
 // pointers: |size,1|elems,8|pointers,8*8|next,8|
 class CANodeReader(backing: Reader) extends CNodeReader {
   val bufInt = Array.fill[Byte](4)(0)
@@ -15,14 +15,17 @@ class CANodeReader(backing: Reader) extends CNodeReader {
   var prefixBuffer = Array.ofDim[Byte](1000)
 
   def readPointers1(address: Long): Array[(Byte, Long)] = {
-    val elemSize = backing.readByte(address)
-    val r = Array.ofDim[(Byte, Long)](elemSize)
-    var i = 0
-    while (i < r.size) {
-      r(i) = backing.readByte(address + 1 + i) -> backing.readLong(address + 1 + GroupSize + i * 8)
-      i += 1
+    if (address < 0) Array()
+    else {
+      val elemSize = backing.readByte(address)
+      val r = Array.ofDim[(Byte, Long)](elemSize)
+      var i = 0
+      while (i < r.size) {
+        r(i) = backing.readByte(address + 1 + i) -> backing.readLong(address + 1 + GroupSize + i * 8)
+        i += 1
+      }
+      r
     }
-    r
   }
   def readPointer1(address: Long, b: Long): Long = {
     val elemSize = backing.readByte(address)
@@ -42,19 +45,25 @@ class CANodeReader(backing: Reader) extends CNodeReader {
   }
 
   def readPointer(i: Long, b: Byte): Long = {
-    val l = readPointer1(i, b)
-    val next = backing.readLong(i + PointerRecordSize - 8) //bb.getLong
-    if (l >= 0) l
-    else if (next < 0) -1L
-    else readPointer(next, b)
+    if (i < 0) -1L
+    else {
+      val l = readPointer1(i, b)
+      val next = backing.readLong(i + PointerRecordSize - 8) //bb.getLong
+      if (l >= 0) l
+      else if (next < 0) -1L
+      else readPointer(next, b)
+    }
   }
 
   def readPointers(address: Long): Stream[Array[(Byte, Long)]] = {
-    val children = readPointers1(address)
-    val next = backing.readLong(address + PointerRecordSize - 8)
-    if (next >= 0) {
-      children #:: readPointers(next)
-    } else Stream(children)
+    if (address < 0) Nil.toStream
+    else {
+      val children = readPointers1(address)
+      val next = backing.readLong(address + PointerRecordSize - 8)
+      if (next >= 0) {
+        children #:: readPointers(next)
+      } else Stream(children)
+    }
   }
 
   val m1 = Array.fill(256)(-1L)
@@ -63,7 +72,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
       val recordSize = backing.readInt(i)
       val payload = backing.readLong(i + 4)
       val children = {
-        val pointers: Stream[Array[(Byte, Long)]] = readPointers(i + 4 + 8)
+        val pointers: Stream[Array[(Byte, Long)]] = readPointers(backing.readLong(i + 4 + 8))
         val ar = java.util.Arrays.copyOf(m1, m1.length)
         pointers.foreach {
           _ foreach {
@@ -74,13 +83,14 @@ class CANodeReader(backing: Reader) extends CNodeReader {
         ar
       }
 
-      val prefix = backing.readBytes(i + 4 + 8 + PointerRecordSize, recordSize - 8 - PointerRecordSize)
+      val prefix = backing.readBytes(i + 4 + 8 + 8, recordSize - 8 - 8)
       Some(CNode(i, children, payload, prefix.toVector))
     } else None
   }
 
-  def readAddress(i: Long, b: Byte): Long =
-    readPointer(i + 4 + 8, b)
+  def readAddress(i: Long, b: Byte): Long = {
+    readPointer(backing.readLong(i + 4 + 8), b)
+  }
 
   def readPayload(i: Long): Long =
     backing.readLong(i + 4)
@@ -88,14 +98,14 @@ class CANodeReader(backing: Reader) extends CNodeReader {
   def readPartial(i: Long, buffer: Array[Byte], offset: Int): (Long, Array[Byte], Int) =
     {
       val recordSize = backing.readInt(i)
-      val bufferSize = recordSize - PointerRecordSize - 8
+      val bufferSize = recordSize - 16
       val buf2 = if (buffer.size >= offset + bufferSize) buffer
       else {
         val ar = Array.ofDim[Byte]((offset + bufferSize) * 2)
         System.arraycopy(buffer, 0, ar, 0, offset)
         ar
       }
-      backing.readBytesInto(i + 4 + 8 + PointerRecordSize, buf2, offset, bufferSize)
+      backing.readBytesInto(i + 4 + 8 + 8, buf2, offset, bufferSize)
       (i, buf2, offset + bufferSize)
     }
 }
@@ -124,7 +134,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
   }
 
   def write(n: CNode) = {
-    val size = n.prefix.size + 4 + 8 + PointerRecordSize
+    val size = n.prefix.size + 4 + 8 + 8
     val ar = Array.ofDim[Byte](size)
     val bb = ByteBuffer.wrap(ar).order(ByteOrder.LITTLE_ENDIAN)
     bb.putInt(size - 4)
@@ -141,15 +151,22 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
       }
       buf
     }
-    writePointers(bb, 0, ch, n.address + PointerRecordSize)
+    val nextPointerBlock = if (ch.isEmpty) -1L else math.max(n.address + size, backing.size)
+    bb.putLong(nextPointerBlock)
     n.prefix.foreach(b => bb.put(b))
     backing.set(n.address, ar)
+    if (!ch.isEmpty) {
+      val buf = Array.ofDim[Byte](PointerRecordSize)
+      val bb2 = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
+      writePointers(bb2, 0, ch, nextPointerBlock)
+      backing.set(nextPointerBlock, buf)
+    }
   }
   def updatePayload(old: CNode, n: Long) = {
     backing.writeLong(n, old.address + 4)
   }
   def updateRoute(old: CNode, b: Byte, a: Long) = {
-    def update(b: Byte, a: Long, idx: Long): Unit = {
+    def update(b: Byte, a: Long, idx: Long, updateAddress: Long): Unit = {
       val elems = readPointers1(idx)
       val next = backing.readLong(idx + PointerRecordSize - 8)
       if (elems.map(_._1).contains(b)) {
@@ -157,7 +174,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
         backing.writeLong(a, idx + 1 + GroupSize + idx2 * 8)
       } else {
         if (elems.size == GroupSize) {
-          if (next >= 0) update(b, a, next)
+          if (next >= 0) update(b, a, next, idx + 1 + GroupSize + GroupSize * 8)
           else {
             val nidx = backing.size
             val bb = ByteBuffer.wrap(pointerRecordBuffer).order(ByteOrder.LITTLE_ENDIAN)
@@ -166,14 +183,24 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
             backing.writeLong(nidx, idx + 1 + GroupSize + GroupSize * 8)
           }
         } else {
-          val size = elems.size
-          backing.set(idx, Array((size + 1).toByte))
-          backing.set(idx + 1 + elems.size, Array(b))
-          backing.writeLong(a, idx + 1 + GroupSize + elems.size * 8)
+          if (idx >= 0) {
+            val size = elems.size
+            backing.set(idx, Array((size + 1).toByte))
+            backing.set(idx + 1 + elems.size, Array(b))
+            backing.writeLong(a, idx + 1 + GroupSize + elems.size * 8)
+          } else {
+            val nidx = backing.size
+            val bb = ByteBuffer.wrap(pointerRecordBuffer).order(ByteOrder.LITTLE_ENDIAN)
+            writePointers(bb, 0, ArrayBuffer(b -> a), nidx)
+            backing.set(nidx, pointerRecordBuffer)
+            backing.writeLong(nidx, updateAddress)
+
+          }
         }
       }
     }
-    update(b, a, old.address + 4 + 8)
+
+    update(b, a, backing.readLong(old.address + 4 + 8), old.address + 4 + 8)
   }
   def append(n: CNode) = {
     val m = n.copy(address = backing.size)

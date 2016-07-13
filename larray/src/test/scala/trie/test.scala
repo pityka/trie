@@ -180,9 +180,9 @@ class TrieSpec extends FunSpec with Matchers {
     "nio"
   )
 
-  // bigTest(
-  //   (f: File) => new LFileWriter(f),
-  //   (f: File) => new LFileReader(f),
-  //   "larray"
-  // )
+  bigTest(
+    (f: File) => new LFileWriter(f),
+    (f: File) => new LFileReader(f),
+    "larray"
+  )
 }
