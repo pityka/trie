@@ -88,8 +88,8 @@ class TrieSpec extends FunSpec with Matchers {
           else kmer(i - 1, c, c.flatMap(c => acc.map(v => v :+ c)))
 
         val buf = Array.ofDim[Byte](50)
-        val alphabet = List('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j').map(_.toByte)
-        val data = kmer(6, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
+        val alphabet = List('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o').map(_.toByte)
+        val data = kmer(5, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
         val data1 = scala.util.Random.shuffle(data)
         val data2 = scala.util.Random.shuffle(data)
         println("kmers size: " + data.size)
