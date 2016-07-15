@@ -2,6 +2,7 @@ package trie
 import org.scalatest.FunSpec
 import org.scalatest.Matchers
 import java.io._
+import org.xerial.snappy.Snappy
 
 class TrieSpec extends FunSpec with Matchers {
 
@@ -22,22 +23,31 @@ class TrieSpec extends FunSpec with Matchers {
 
     describe("cnode adaptive storage " + name) {
       it("simple") {
-        val n1 = CNode(Array.fill(256)(-1L).updated(1, 13L), 113L, Vector[Byte](0, 1)).copy(address = 0L)
-        val n2 = CNode(Array.fill(256)(-1L), 114L, Vector[Byte](0, 1, 2, 3))
+        val n1 = CNode(Array.fill(256)(-1L).updated(1, 13L), 113L, Array[Byte](0, 1)).copy(address = 0L)
+        val n2 = CNode(Array.fill(256)(-1L), 114L, Array[Byte](0, 1, 2, 3))
         val s = newstorage()
         val ns = new CANodeWriter(s)
         ns.append(n1)
-        ns.read(0).get should equal(n1)
+        ns.read(0).get.payload should equal(n1.payload)
+        ns.read(0).get.children should equal(n1.children)
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
         ns.readAddress(0, 1) should equal(13L)
         val buf = Array[Byte](3, 2, 1)
         val (a1, a2, a3) = ns.readPartial(0, buf, 1)
         (a1, a2.toVector, a3) should equal((0, List[Byte](3, 0, 1), 3))
         // ns.append(n2)
-        ns.read(0).get should equal(n1)
+        ns.read(0).get.payload should equal(n1.payload)
+        ns.read(0).get.children should equal(n1.children)
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
         ns.updatePayload(n1, 3L)
-        ns.read(0).get should equal(n1.copy(payload = 3L))
+        ns.read(0).get.payload should equal(3L)
+        ns.read(0).get.children should equal(n1.children)
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
         ns.updateRoute(n1, 2, 3L)
-        ns.read(0).get should equal(n1.copy(payload = 3L, children = n1.children.updated(2, 3L)))
+        ns.read(0).get.payload should equal(3L)
+        ns.read(0).get.children should equal(n1.children.updated(2, 3L))
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
+
         0 to 48 map { i =>
           ns.updateRoute(n1, i.toByte, i.toLong)
         }
@@ -50,7 +60,7 @@ class TrieSpec extends FunSpec with Matchers {
     describe("catrie " + name) {
       it("write+query small") {
         val data = List("aaa" -> 0L, "a" -> 1L, "aa" -> 3L, "b" -> 2L, "bb" -> 4L, "ab" -> 5L, "aba" -> 6L, "abb" -> 7L, "tester" -> 8L, "test" -> 9L, "team" -> 10L, "toast" -> 11L)
-          .map(x => x._1.getBytes("US-ASCII").toVector -> x._2)
+          .map(x => x._1.getBytes("US-ASCII") -> x._2)
         val s = newstorage()
         val ns = new CANodeWriter(s)
         CTrie.build(data.iterator, ns)
@@ -58,14 +68,14 @@ class TrieSpec extends FunSpec with Matchers {
           case (k, v) =>
             CTrie.query(ns, k) should equal(Some(v))
         }
-        CTrie.query(ns, "abc".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns, "c".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns, "aaaa".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns, "bba".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns, "bbb".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.prefixPayload(ns, "a".toVector.map(_.toByte)).toSet should equal(Set(0l, 1L, 3L, 7L, 6L, 5L))
-        CTrie.prefixPayload(ns, "z".toVector.map(_.toByte)).toSet should equal(Set())
-        CTrie.prefixPayload(ns, "tes".toVector.map(_.toByte)).toSet should equal(Set(8L, 9L))
+        CTrie.query(ns, "abc".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "c".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "aaaa".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "bba".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "bbb".getBytes("US-ASCII")) should equal(None)
+        CTrie.prefixPayload(ns, "a".toVector.map(_.toByte).toArray).toSet should equal(Set(0l, 1L, 3L, 7L, 6L, 5L))
+        CTrie.prefixPayload(ns, "z".toVector.map(_.toByte).toArray).toSet should equal(Set())
+        CTrie.prefixPayload(ns, "tes".toVector.map(_.toByte).toArray).toSet should equal(Set(8L, 9L))
 
       }
 
@@ -94,7 +104,7 @@ class TrieSpec extends FunSpec with Matchers {
 
         val buf = Array.ofDim[Byte](50)
         val alphabet = List('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o').map(_.toByte)
-        val data = kmer(5, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => x._1 -> x._2.toLong)
+        val data = kmer(5, alphabet, alphabet.toVector :: Nil).zipWithIndex.map(x => Snappy.compress(x._1.toArray) -> x._2.toLong)
         val data1 = scala.util.Random.shuffle(data)
         val data2 = scala.util.Random.shuffle(data)
         println("kmers size: " + data.size)
@@ -138,7 +148,7 @@ class TrieSpec extends FunSpec with Matchers {
         def data = {
           val rnd = new scala.util.Random(1)
           (0 to 1000000 iterator).map(i => 0 to 30 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
-            .map(x => x._1.getBytes("US-ASCII").toVector -> x._2.toLong)
+            .map(x => x._1.getBytes("US-ASCII") -> x._2.toLong)
         }
         val tmp = File.createTempFile("catrie", "dfsd")
         println(tmp)
@@ -163,11 +173,11 @@ class TrieSpec extends FunSpec with Matchers {
         println(name + " " + ts.sorted.apply((ts.size * 0.75).toInt))
         println(name + " " + ts.min)
         println(name + " " + ts.zipWithIndex.maxBy(_._1))
-        CTrie.query(ns2, "abc".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns2, "c".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns2, "aaa".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns2, "bba".getBytes("US-ASCII").toVector) should equal(None)
-        CTrie.query(ns2, "bbb".getBytes("US-ASCII").toVector) should equal(None)
+        CTrie.query(ns2, "abc".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns2, "c".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns2, "aaa".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns2, "bba".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns2, "bbb".getBytes("US-ASCII")) should equal(None)
         println(tmp.length / 1024 / 1024)
         tmp.delete
       }

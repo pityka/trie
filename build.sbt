@@ -5,7 +5,6 @@ lazy val commonSettings = Seq(
   version := "0.0.2-SNAPSHOT",
   scalaVersion := "2.11.8",
   javacOptions ++= Seq("-Xdoclint:none")
-
 )
 
 lazy val core = project.in(file(".")).
@@ -13,7 +12,8 @@ lazy val core = project.in(file(".")).
 		settings(
 			name:="trie-core",
       libraryDependencies ++= Seq(
-        "org.scalatest" %% "scalatest" % "2.1.5" % "test"
+        "org.scalatest" %% "scalatest" % "2.1.5" % "test",
+        "org.xerial.snappy" % "snappy-java" % "1.1.2.1"
 		))
 
 lazy val larray = project.in(file("larray")).

@@ -84,7 +84,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
       }
 
       val prefix = backing.readBytes(i + 4 + 8 + 8, recordSize - 8 - 8)
-      Some(CNode(i, children, payload, prefix.toVector))
+      Some(CNode(i, children, payload, prefix))
     } else None
   }
 

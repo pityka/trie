@@ -4,14 +4,14 @@ case class CNode(
     address: Long,
     children: IndexedSeq[Long],
     payload: Long,
-    prefix: Vector[Byte]
+    prefix: Array[Byte]
 ) {
   assert(children.size == 256)
 }
 
 object CNode {
-  def empty = CNode(-1L, Array.fill(256)(-1L), -1L, Vector())
-  def apply(children: IndexedSeq[Long], payload: Long, prefix: Vector[Byte]): CNode = CNode(-1L, children, payload, prefix)
+  def empty = CNode(-1L, Array.fill(256)(-1L), -1L, Array())
+  def apply(children: IndexedSeq[Long], payload: Long, prefix: Array[Byte]): CNode = CNode(-1L, children, payload, prefix)
 }
 
 // case class PartialCNode(
@@ -36,74 +36,89 @@ trait CNodeWriter extends CNodeReader {
 
 object CTrie {
 
-  def sharedPrefix(a: List[Byte], b: List[Byte], acc: Vector[Byte]): Vector[Byte] =
-    if (a.isEmpty || b.isEmpty || a.head != b.head) acc.reverse
-    else sharedPrefix(a.tail, b.tail, a.head +: acc)
+  def sharedPrefix(a: Array[Byte], b: Array[Byte], acc: List[Byte], i: Int): List[Byte] = sharedPrefix(a, 0, a.size, b, acc, i)
 
-  def sharedPrefix(p: Array[Byte], start: Int, len: Int, b: Vector[Byte], acc: List[Byte], i: Int): List[Byte] =
-    if (i + start >= len || b.isEmpty || p(i + start) != b.head) acc.reverse
-    else sharedPrefix(p, start, len, b.tail, b.head :: acc, i + 1)
+  def sharedPrefix(p: Array[Byte], start: Int, len: Int, b: Array[Byte], acc: List[Byte], i: Int): List[Byte] =
+    if (i + start >= len || b.size <= i || p(i + start) != b(i)) acc.reverse
+    else sharedPrefix(p, start, len, b, b(i) :: acc, i + 1)
 
-  def build(data: Iterator[(Vector[Byte], Long)], storage: CNodeWriter): Unit = {
+  def startsWith(q: Array[Byte], b: Array[Byte], start: Int, len: Int, i: Int): Boolean =
+    if (q.size <= i) false
+    else {
+      if (i + start < len) {
+        val h = q(i)
+        val v = b(i + start)
+        if (h == v) startsWith(q, b, start, len, i + 1)
+        else false
+      } else true
+    }
+
+  def drop(key: Array[Byte], v: Int) =
+    {
+      val ar = Array.ofDim[Byte](key.size - v)
+      System.arraycopy(key, v, ar, 0, ar.size)
+      ar
+    }
+
+  def take(key: Array[Byte], v: Int) =
+    {
+      val ar = Array.ofDim[Byte](v)
+      System.arraycopy(key, 0, ar, 0, ar.size)
+      ar
+    }
+
+  def insert(key: Array[Byte], value: Long, storage: CNodeWriter, root: CNode): Unit = {
+    queryNode(storage, key) match {
+      case Right((lastNode, _)) => storage.updatePayload(lastNode, value)
+      case Left((lastNode, prefix)) => {
+        if (startsWith(key, prefix, 0, prefix.size, 0)) {
+          val rest = drop(key, prefix.size)
+          val n = CNode(Array.fill(256)(-1L), value, rest)
+          val n1 = storage.append(n)
+          storage.updateRoute(lastNode, rest(0), n1.address)
+        } else {
+
+          val sharedP = sharedPrefix(key, prefix, List(), 0).toArray
+          val keyRest = drop(key, sharedP.size)
+          val lastNodePrefixRest = drop(prefix, sharedP.size)
+          val lastNodePrefixUsed = take(lastNode.prefix, lastNode.prefix.size - lastNodePrefixRest.size)
+
+          val m = CNode(lastNode.children, lastNode.payload, lastNodePrefixRest)
+          val m1 = storage.append(m)
+
+          if (keyRest.isEmpty) {
+            val routes = Array.fill(256)(-1L)
+              .updated(lastNodePrefixRest.head, m1.address)
+
+            storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = value))
+          } else {
+            val n = CNode(Array.fill(256)(-1L), value, keyRest)
+            val n1 = storage.append(n)
+
+            val routes = Array.fill(256)(-1L)
+              .updated(keyRest.head, n1.address)
+              .updated(lastNodePrefixRest.head, m1.address)
+
+            storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = (-1L)))
+          }
+
+        }
+      }
+    }
+  }
+
+  def build(data: Iterator[(Array[Byte], Long)], storage: CNodeWriter): Unit = {
     val root = storage.read(0).getOrElse {
       val n = CNode.empty
       storage.append(n)
     }
     data.foreach {
       case (key, value) =>
-        queryNode(storage, key) match {
-          case Right((lastNode, _)) => storage.updatePayload(lastNode, value)
-          case Left((lastNode, prefix)) => {
-            if (key.startsWith(prefix)) {
-              val rest = key.drop(prefix.size)
-              val n = CNode(Array.fill(256)(-1L), value, rest)
-              val n1 = storage.append(n)
-              storage.updateRoute(lastNode, rest.head, n1.address)
-            } else {
-
-              val sharedP = sharedPrefix(key.toList, prefix.toList, Vector())
-              val keyRest = key.drop(sharedP.size)
-              val lastNodePrefixRest = prefix.drop(sharedP.size)
-              val lastNodePrefixUsed = lastNode.prefix.take(lastNode.prefix.size - lastNodePrefixRest.size)
-
-              val m = CNode(lastNode.children, lastNode.payload, lastNodePrefixRest)
-              val m1 = storage.append(m)
-
-              if (keyRest.isEmpty) {
-                val routes = Array.fill(256)(-1L)
-                  .updated(lastNodePrefixRest.head, m1.address)
-
-                storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = value))
-              } else {
-                val n = CNode(Array.fill(256)(-1L), value, keyRest)
-                val n1 = storage.append(n)
-
-                val routes = Array.fill(256)(-1L)
-                  .updated(keyRest.head, n1.address)
-                  .updated(lastNodePrefixRest.head, m1.address)
-
-                storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = (-1L)))
-              }
-
-            }
-          }
-        }
+        insert(key, value, storage, root)
     }
   }
 
-  def startsWith(q: Vector[Byte], b: Array[Byte], start: Int, len: Int, i: Int): Boolean =
-    if (q.isEmpty) false
-    else {
-      if (i + start < len) {
-        val h = q.head
-        val t = q.tail
-        val v = b(i + start)
-        if (h == v) startsWith(t, b, start, len, i + 1)
-        else false
-      } else true
-    }
-
-  def prefixPayload(trie: CNodeReader, q: Vector[Byte]): Vector[Long] = {
+  def prefixPayload(trie: CNodeReader, q: Array[Byte]): Vector[Long] = {
     val first = queryNode(trie, q)
     first match {
       case Left((node, p)) =>
@@ -121,54 +136,52 @@ object CTrie {
 
   }
 
-  def loop(trie: CNodeReader, node: Long, p: Array[Byte], start: Int, off: Int, q: Vector[Byte]): (Long, Array[Byte], Int) = {
-    q match {
-      case Vector() => {
+  def loop(trie: CNodeReader, node: Long, p: Array[Byte], start: Int, off: Int, q: Array[Byte]): (Long, Array[Byte], Int) = {
+    if (q.size == 0) {
+      (node, p, off)
+    } else {
+      val sharedP = sharedPrefix(p, start, off, q, Nil, 0)
+      if (sharedP.size == q.size) {
         (node, p, off)
-      }
-      case xxs => {
-        val sharedP = sharedPrefix(p, start, off, q, Nil, 0)
-        if (sharedP.size == q.size) {
+      } else {
+        val nextAddr: Long = trie.readAddress(node, q(sharedP.size))
+        if (nextAddr == -1) {
           (node, p, off)
         } else {
-          val nextAddr: Long = trie.readAddress(node, q.drop(sharedP.size).head)
-          if (nextAddr == -1) {
-            (node, p, off)
+          val (n, p2, off2) = trie.readPartial(nextAddr, p, off)
+          val tail = drop(q, sharedP.size)
+          if (startsWith(tail, p2, off, off2, 0)) {
+            loop(trie, n, p2, off, off2, tail)
           } else {
-            val (n, p2, off2) = trie.readPartial(nextAddr, p, off)
-            val tail = q.drop(sharedP.size)
-            if (startsWith(tail, p2, off, off2, 0)) {
-              loop(trie, n, p2, off, off2, tail)
-            } else {
-              (n, p2, off2)
-            }
+            (n, p2, off2)
           }
         }
       }
     }
+
   }
 
-  def queryNode(trie: CNodeReader, q: Vector[Byte]): Either[(CNode, Vector[Byte]), (CNode, Long)] = {
+  def queryNode(trie: CNodeReader, q: Array[Byte]): Either[(CNode, Array[Byte]), (CNode, Long)] = {
 
     val (root, p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0)
     val (lastNodeAddress, prefix, prefixLen) = loop(trie, root, p2, 0, off2, q)
     val lastNode = trie.read(lastNodeAddress).get
 
-    val lastNodePrefix = prefix.slice(0, prefixLen).toVector
-    if (lastNodePrefix == q) Right(lastNode -> lastNode.payload)
+    val lastNodePrefix = prefix.slice(0, prefixLen)
+    if (java.util.Arrays.equals(lastNodePrefix, q)) Right(lastNode -> lastNode.payload)
     else {
       Left((lastNode, lastNodePrefix))
     }
 
   }
 
-  def query(trie: CNodeReader, q: Vector[Byte]): Option[Long] = {
+  def query(trie: CNodeReader, q: Array[Byte]): Option[Long] = {
 
     val (root, p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0)
     val (lastNodeAddress, prefix, prefixLen) = loop(trie, root, p2, 0, off2, q)
 
-    val lastNodePrefix = prefix.slice(0, prefixLen).toVector
-    if (lastNodePrefix == q) {
+    val lastNodePrefix = prefix.slice(0, prefixLen)
+    if (java.util.Arrays.equals(lastNodePrefix, q)) {
       val pl = trie.readPayload(lastNodeAddress)
       if (pl >= 0) Some(pl)
       else None
