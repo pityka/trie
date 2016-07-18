@@ -7,6 +7,7 @@ case class CNode(
     prefix: Array[Byte]
 ) {
   assert(children.size == 256)
+  override def toString = "CNode(" + address + "," + children.filter(_ >= 0) + "," + payload + "," + new String(prefix.map(_.toChar)) + ")"
 }
 
 object CNode {
@@ -187,6 +188,19 @@ object CTrie {
       else None
     } else None
 
+  }
+
+  def traverse(trie: CNodeReader, queue: Vector[CNode]): Stream[CNode] = {
+    if (queue.isEmpty) Stream()
+    else {
+      val children: IndexedSeq[CNode] = queue.head.children.filter(_ >= 0).map(l => trie.read(l).get)
+      queue.head #:: traverse(trie, queue.tail ++ children)
+    }
+  }
+
+  def traverse(trie: CNodeReader): Stream[CNode] = {
+    val root = trie.read(0).get
+    traverse(trie, Vector(root))
   }
 
 }

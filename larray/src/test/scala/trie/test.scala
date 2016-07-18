@@ -77,6 +77,8 @@ class TrieSpec extends FunSpec with Matchers {
         CTrie.prefixPayload(ns, "z".toVector.map(_.toByte).toArray).toSet should equal(Set())
         CTrie.prefixPayload(ns, "tes".toVector.map(_.toByte).toArray).toSet should equal(Set(8L, 9L))
 
+        CTrie.traverse(ns).toList.map(x => new String(x.prefix.map(_.toChar))) should equal(List("", "a", "b", "t", "a", "b", "b", "e", "oast", "a", "a", "b", "am", "st", "er"))
+
       }
 
     }
@@ -138,16 +140,18 @@ class TrieSpec extends FunSpec with Matchers {
           (System.nanoTime - t1) / 1E9
         }
         println(name + " " + tmax.min + " " + tmax.sorted.apply(5000) + " " + tmax.max)
-        println(name + " " + tmp.length / 1024 / 1024)
+        println(name + " kmer: " + tmp.length / 1024 / 1024)
+        println(name + " kmer nodes: " + CTrie.traverse(ns2).size)
         tmp.delete
       }
 
       it("random " + name) {
         val buf = Array.ofDim[Byte](50)
-
+        val alphabet = Array('a', 'b', 'c')
         def data = {
           val rnd = new scala.util.Random(1)
-          (0 to 1000000 iterator).map(i => 0 to 30 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
+
+          (0 to 100000 iterator).map(i => 0 to 300 map (j => alphabet(rnd.nextInt(alphabet.size))) mkString).zipWithIndex
             .map(x => x._1.getBytes("US-ASCII") -> x._2.toLong)
         }
         val tmp = File.createTempFile("catrie", "dfsd")
@@ -178,17 +182,19 @@ class TrieSpec extends FunSpec with Matchers {
         CTrie.query(ns2, "aaa".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "bba".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "bbb".getBytes("US-ASCII")) should equal(None)
-        println(tmp.length / 1024 / 1024)
+        println("random :" + tmp.length / 1024 / 1024)
+        println(name + " random nodes: " + CTrie.traverse(ns2).size)
+
         tmp.delete
       }
     }
   }
 
-  bigTest(
-    (f: File) => FileWriter.open(f),
-    (f: File) => FileReader.open(f),
-    "nio"
-  )
+  // bigTest(
+  //   (f: File) => FileWriter.open(f),
+  //   (f: File) => FileReader.open(f),
+  //   "nio"
+  // )
 
   bigTest(
     (f: File) => new LFileWriter(f),
