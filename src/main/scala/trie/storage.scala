@@ -72,9 +72,10 @@ class InMemoryStorage extends JReader with JWriter {
     if (backing.size <= ii + v.size) {
       backing.appendAll(ArrayBuffer.fill[Byte](ii - backing.size + v.size)(0))
     }
-    v.zipWithIndex.foreach {
-      case (b, i) =>
-        backing(ii + i) = b
+    var j = 0
+    while (j < v.size) {
+      backing(i.toInt + j) = v(j)
+      j += 1
     }
     size = math.max(i.toInt + v.size, size)
   }

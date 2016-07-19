@@ -122,13 +122,15 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
     0 until GroupSize foreach { i =>
       if (s > i) bb.putLong(pointers(i + start)._2) else bb.putLong(-1L)
     }
-    if (pointers.size - start - s <= 0) bb.putLong(-1L)
-    else {
-      val next = math.max(backing.size, address)
+    if (pointers.size - start - s <= 0) {
+      bb.putLong(-1L)
+      backing.set(address, pointerRecordBuffer)
+    } else {
+      val next = math.max(backing.size, address + PointerRecordSize)
       bb.putLong(next)
+      backing.set(address, pointerRecordBuffer)
       val bb2 = ByteBuffer.wrap(pointerRecordBuffer).order(ByteOrder.LITTLE_ENDIAN)
-      writePointers(bb2, start + s, pointers, next + PointerRecordSize)
-      backing.set(next, pointerRecordBuffer)
+      writePointers(bb2, start + s, pointers, next)
     }
 
   }
@@ -156,16 +158,16 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
     n.prefix.foreach(b => bb.put(b))
     backing.set(n.address, ar)
     if (!ch.isEmpty) {
-      val buf = Array.ofDim[Byte](PointerRecordSize)
-      val bb2 = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
+      val bb2 = ByteBuffer.wrap(pointerRecordBuffer).order(ByteOrder.LITTLE_ENDIAN)
       writePointers(bb2, 0, ch, nextPointerBlock)
-      backing.set(nextPointerBlock, buf)
     }
+    // assert(read(n.address).get.children == n.children)
+    // assert(read(n.address).get.prefix.deep == n.prefix.deep)
   }
   def updatePayload(old: CNode, n: Long) = {
     backing.writeLong(n, old.address + 4)
   }
-  def updateRoute(old: CNode, b: Byte, a: Long) = {
+  def updateRoute(old: Long, b: Byte, a: Long) = {
     def update(b: Byte, a: Long, idx: Long, updateAddress: Long): Unit = {
       val elems = readPointers1(idx)
       val next = backing.readLong(idx + PointerRecordSize - 8)
@@ -200,7 +202,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
       }
     }
 
-    update(b, a, backing.readLong(old.address + 4 + 8), old.address + 4 + 8)
+    update(b, a, backing.readLong(old + 4 + 8), old + 4 + 8)
   }
   def append(n: CNode) = {
     val m = n.copy(address = backing.size)

@@ -15,11 +15,6 @@ object CNode {
   def apply(children: IndexedSeq[Long], payload: Long, prefix: Array[Byte]): CNode = CNode(-1L, children, payload, prefix)
 }
 
-// case class PartialCNode(
-//   address: Long,
-//   prefix: Array[Byte]
-// )
-
 trait CNodeReader {
   def read(i: Long): Option[CNode]
   def readAddress(i: Long, b: Byte): Long
@@ -31,7 +26,7 @@ trait CNodeReader {
 trait CNodeWriter extends CNodeReader {
   def write(n: CNode): Unit
   def updatePayload(old: CNode, n: Long): Unit
-  def updateRoute(old: CNode, b: Byte, a: Long): Unit
+  def updateRoute(old: Long, b: Byte, a: Long): Unit
   def append(n: CNode): CNode
 }
 
@@ -76,7 +71,7 @@ object CTrie {
           val rest = drop(key, prefix.size)
           val n = CNode(Array.fill(256)(-1L), value, rest)
           val n1 = storage.append(n)
-          storage.updateRoute(lastNode, rest(0), n1.address)
+          storage.updateRoute(lastNode.address, rest(0), n1.address)
         } else {
 
           val sharedP = sharedPrefix(key, prefix, List(), 0).toArray
@@ -106,6 +101,7 @@ object CTrie {
         }
       }
     }
+    // assert(query(storage, key).get == value)
   }
 
   def build(data: Iterator[(Array[Byte], Long)], storage: CNodeWriter): Unit = {
@@ -122,9 +118,10 @@ object CTrie {
   def prefixPayload(trie: CNodeReader, q: Array[Byte]): Vector[Long] = {
     val first = queryNode(trie, q)
     first match {
-      case Left((node, p)) =>
+      case Left((node, p)) => {
         if (p.startsWith(q)) node.payload +: node.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
         else Vector()
+      }
       case Right((node, pl)) => node.payload +: node.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
     }
   }
@@ -202,5 +199,29 @@ object CTrie {
     val root = trie.read(0).get
     traverse(trie, Vector(root))
   }
+
+  def copy(stream: Iterator[CNode], writer: CNodeWriter): Unit = {
+    val mmap = scala.collection.mutable.LongMap[(Long, Byte)]()
+    stream.foreach { node =>
+      val appended = writer.append(node)
+
+      var char: Int = 0
+      appended.children.foreach {
+        case (ch) =>
+          if (ch >= 0) {
+            mmap.update(ch, appended.address -> char.toByte)
+          }
+          char += 1
+      }
+      mmap.get(node.address).foreach {
+        case (parent, char) =>
+          writer.updateRoute(parent, char, appended.address)
+      }
+      mmap.remove(node.address)
+
+    }
+  }
+
+  def copy(trie: CNodeReader, dst: CNodeWriter): Unit = copy(traverse(trie).iterator, dst)
 
 }

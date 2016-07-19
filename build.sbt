@@ -12,8 +12,7 @@ lazy val core = project.in(file(".")).
 		settings(
 			name:="trie-core",
       libraryDependencies ++= Seq(
-        "org.scalatest" %% "scalatest" % "2.1.5" % "test",
-        "org.xerial.snappy" % "snappy-java" % "1.1.2.1"
+        "org.scalatest" %% "scalatest" % "2.1.5" % "test"
 		))
 
 lazy val larray = project.in(file("larray")).
