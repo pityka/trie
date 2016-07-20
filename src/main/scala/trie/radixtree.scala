@@ -2,17 +2,16 @@ package trie
 
 case class CNode(
     address: Long,
-    children: IndexedSeq[Long],
+    children: Map[Byte, Long],
     payload: Long,
     prefix: Array[Byte]
 ) {
-  assert(children.size == 256)
-  override def toString = "CNode(" + address + "," + children.filter(_ >= 0) + "," + payload + "," + new String(prefix.map(_.toChar)) + ")"
+  override def toString = "CNode(" + address + "," + children + "," + payload + "," + new String(prefix.map(_.toChar)) + ")"
 }
 
 object CNode {
-  def empty = CNode(-1L, Array.fill(256)(-1L), -1L, Array())
-  def apply(children: IndexedSeq[Long], payload: Long, prefix: Array[Byte]): CNode = CNode(-1L, children, payload, prefix)
+  def empty = CNode(-1L, Map(), -1L, Array())
+  def apply(children: Map[Byte, Long], payload: Long, prefix: Array[Byte]): CNode = CNode(-1L, children, payload, prefix)
 }
 
 trait CNodeReader {
@@ -69,7 +68,7 @@ object CTrie {
       case Left((lastNode, prefix)) => {
         if (startsWith(key, prefix, 0, prefix.size, 0)) {
           val rest = drop(key, prefix.size)
-          val n = CNode(Array.fill(256)(-1L), value, rest)
+          val n = CNode(Map(), value, rest)
           val n1 = storage.append(n)
           storage.updateRoute(lastNode.address, rest(0), n1.address)
         } else {
@@ -83,17 +82,17 @@ object CTrie {
           val m1 = storage.append(m)
 
           if (keyRest.isEmpty) {
-            val routes = Array.fill(256)(-1L)
-              .updated(lastNodePrefixRest.head, m1.address)
+            val routes = Map(lastNodePrefixRest.head -> m1.address)
 
             storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = value))
           } else {
-            val n = CNode(Array.fill(256)(-1L), value, keyRest)
+            val n = CNode(Map(), value, keyRest)
             val n1 = storage.append(n)
 
-            val routes = Array.fill(256)(-1L)
-              .updated(keyRest.head, n1.address)
-              .updated(lastNodePrefixRest.head, m1.address)
+            val routes = Map(
+              keyRest.head -> n1.address,
+              lastNodePrefixRest.head -> m1.address
+            )
 
             storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = (-1L)))
           }
@@ -119,39 +118,40 @@ object CTrie {
     val first = queryNode(trie, q)
     first match {
       case Left((node, p)) => {
-        if (p.startsWith(q)) node.payload +: node.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
+        if (p.startsWith(q)) node.payload +: node.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
         else Vector()
       }
-      case Right((node, pl)) => node.payload +: node.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
+      case Right((node, pl)) => node.payload +: node.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
     }
   }
 
   def childrenPayload(trie: CNodeReader, n: Long): Vector[Long] = {
     val node = trie.read(n)
     if (node.isDefined) {
-      node.get.payload +: node.get.children.filter(_ >= 0).map(i => childrenPayload(trie, i)).flatten.toVector
+      node.get.payload +: node.get.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
     } else Vector()
 
   }
 
-  def loop(trie: CNodeReader, node: Long, p: Array[Byte], start: Int, off: Int, q: Array[Byte]): (Long, Array[Byte], Int) = {
+  def loop(trie: CNodeReader, node: Long, p: Array[Byte], start: Int, off: Int, q: Array[Byte]): (Long, Array[Byte], Int, Boolean) = {
     if (q.size == 0) {
-      (node, p, off)
+      (node, p, off, true)
     } else {
       val sharedP = sharedPrefix(p, start, off, q, Nil, 0)
       if (sharedP.size == q.size) {
-        (node, p, off)
+        (node, p, off, true)
       } else {
         val nextAddr: Long = trie.readAddress(node, q(sharedP.size))
         if (nextAddr == -1) {
-          (node, p, off)
+          (node, p, off, false)
         } else {
           val (n, p2, off2) = trie.readPartial(nextAddr, p, off)
           val tail = drop(q, sharedP.size)
           if (startsWith(tail, p2, off, off2, 0)) {
             loop(trie, n, p2, off, off2, tail)
           } else {
-            (n, p2, off2)
+            val shared2 = sharedPrefix(p2, off, off2, tail, Nil, 0)
+            (n, p2, off2, shared2.size == tail.size && shared2.size == (off2 - off))
           }
         }
       }
@@ -162,13 +162,12 @@ object CTrie {
   def queryNode(trie: CNodeReader, q: Array[Byte]): Either[(CNode, Array[Byte]), (CNode, Long)] = {
 
     val (root, p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0)
-    val (lastNodeAddress, prefix, prefixLen) = loop(trie, root, p2, 0, off2, q)
+    val (lastNodeAddress, prefix, prefixLen, succ) = loop(trie, root, p2, 0, off2, q)
     val lastNode = trie.read(lastNodeAddress).get
 
-    val lastNodePrefix = prefix.slice(0, prefixLen)
-    if (java.util.Arrays.equals(lastNodePrefix, q)) Right(lastNode -> lastNode.payload)
+    if (succ) Right(lastNode -> lastNode.payload)
     else {
-      Left((lastNode, lastNodePrefix))
+      Left((lastNode, prefix.slice(0, prefixLen)))
     }
 
   }
@@ -176,10 +175,8 @@ object CTrie {
   def query(trie: CNodeReader, q: Array[Byte]): Option[Long] = {
 
     val (root, p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0)
-    val (lastNodeAddress, prefix, prefixLen) = loop(trie, root, p2, 0, off2, q)
-
-    val lastNodePrefix = prefix.slice(0, prefixLen)
-    if (java.util.Arrays.equals(lastNodePrefix, q)) {
+    val (lastNodeAddress, prefix, prefixLen, succ) = loop(trie, root, p2, 0, off2, q)
+    if (succ) {
       val pl = trie.readPayload(lastNodeAddress)
       if (pl >= 0) Some(pl)
       else None
@@ -190,7 +187,7 @@ object CTrie {
   def traverse(trie: CNodeReader, queue: Vector[CNode]): Stream[CNode] = {
     if (queue.isEmpty) Stream()
     else {
-      val children: IndexedSeq[CNode] = queue.head.children.filter(_ >= 0).map(l => trie.read(l).get)
+      val children = queue.head.children.map(l => trie.read(l._2).get)
       queue.head #:: traverse(trie, queue.tail ++ children)
     }
   }
@@ -205,13 +202,9 @@ object CTrie {
     stream.foreach { node =>
       val appended = writer.append(node)
 
-      var char: Int = 0
       appended.children.foreach {
-        case (ch) =>
-          if (ch >= 0) {
-            mmap.update(ch, appended.address -> char.toByte)
-          }
-          char += 1
+        case (char, ch) =>
+          mmap.update(ch, appended.address -> char)
       }
       mmap.get(node.address).foreach {
         case (parent, char) =>

@@ -71,17 +71,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
     if (backing.size >= i + 4) {
       val recordSize = backing.readInt(i)
       val payload = backing.readLong(i + 4)
-      val children = {
-        val pointers: Stream[Array[(Byte, Long)]] = readPointers(backing.readLong(i + 4 + 8))
-        val ar = java.util.Arrays.copyOf(m1, m1.length)
-        pointers.foreach {
-          _ foreach {
-            case (b, l) =>
-              ar(b) = l
-          }
-        }
-        ar
-      }
+      val children = readPointers(backing.readLong(i + 4 + 8)).flatten.toMap
 
       val prefix = backing.readBytes(i + 4 + 8 + 8, recordSize - 8 - 8)
       Some(CNode(i, children, payload, prefix))
@@ -141,18 +131,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
     val bb = ByteBuffer.wrap(ar).order(ByteOrder.LITTLE_ENDIAN)
     bb.putInt(size - 4)
     bb.putLong(n.payload)
-    val ch = {
-      val buf = scala.collection.mutable.ArrayBuffer[(Byte, Long)]()
-      var i = 0
-      while (i < 256) {
-        val v = n.children(i)
-        if (v >= 0) {
-          buf.append(i.toByte -> v)
-        }
-        i += 1
-      }
-      buf
-    }
+    val ch = ArrayBuffer(n.children.toSeq: _*)
     val nextPointerBlock = if (ch.isEmpty) -1L else math.max(n.address + size, backing.size)
     bb.putLong(nextPointerBlock)
     n.prefix.foreach(b => bb.put(b))
