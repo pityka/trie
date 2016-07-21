@@ -31,11 +31,11 @@ trait CNodeWriter extends CNodeReader {
 
 object CTrie {
 
-  def sharedPrefix(a: Array[Byte], b: Array[Byte], acc: List[Byte], i: Int): List[Byte] = sharedPrefix(a, 0, a.size, b, acc, i)
+  def sharedPrefix(a: Array[Byte], b: Array[Byte], i: Int): Int = sharedPrefix(a, 0, a.size, b, i)
 
-  def sharedPrefix(p: Array[Byte], start: Int, len: Int, b: Array[Byte], acc: List[Byte], i: Int): List[Byte] =
-    if (i + start >= len || b.size <= i || p(i + start) != b(i)) acc.reverse
-    else sharedPrefix(p, start, len, b, b(i) :: acc, i + 1)
+  def sharedPrefix(p: Array[Byte], start: Int, len: Int, b: Array[Byte], i: Int): Int =
+    if (i + start >= len || b.size <= i || p(i + start) != b(i)) i
+    else sharedPrefix(p, start, len, b, i + 1)
 
   def startsWith(q: Array[Byte], b: Array[Byte], start: Int, len: Int, i: Int): Boolean =
     if (q.size <= i) false
@@ -73,9 +73,9 @@ object CTrie {
           storage.updateRoute(lastNode.address, rest(0), n1.address)
         } else {
 
-          val sharedP = sharedPrefix(key, prefix, List(), 0).toArray
-          val keyRest = drop(key, sharedP.size)
-          val lastNodePrefixRest = drop(prefix, sharedP.size)
+          val sharedP = sharedPrefix(key, prefix, 0)
+          val keyRest = drop(key, sharedP)
+          val lastNodePrefixRest = drop(prefix, sharedP)
           val lastNodePrefixUsed = take(lastNode.prefix, lastNode.prefix.size - lastNodePrefixRest.size)
 
           val m = CNode(lastNode.children, lastNode.payload, lastNodePrefixRest)
@@ -137,21 +137,21 @@ object CTrie {
     if (q.size == 0) {
       (node, p, off, true)
     } else {
-      val sharedP = sharedPrefix(p, start, off, q, Nil, 0)
-      if (sharedP.size == q.size) {
+      val sharedP = sharedPrefix(p, start, off, q, 0)
+      if (sharedP == q.size) {
         (node, p, off, true)
       } else {
-        val nextAddr: Long = trie.readAddress(node, q(sharedP.size))
+        val nextAddr: Long = trie.readAddress(node, q(sharedP))
         if (nextAddr == -1) {
           (node, p, off, false)
         } else {
           val (n, p2, off2) = trie.readPartial(nextAddr, p, off)
-          val tail = drop(q, sharedP.size)
+          val tail = drop(q, sharedP)
           if (startsWith(tail, p2, off, off2, 0)) {
             loop(trie, n, p2, off, off2, tail)
           } else {
-            val shared2 = sharedPrefix(p2, off, off2, tail, Nil, 0)
-            (n, p2, off2, shared2.size == tail.size && shared2.size == (off2 - off))
+            val shared2 = sharedPrefix(p2, off, off2, tail, 0)
+            (n, p2, off2, shared2 == tail.size && shared2 == (off2 - off))
           }
         }
       }
