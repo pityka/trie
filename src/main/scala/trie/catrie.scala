@@ -71,7 +71,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
     if (backing.size >= i + 4) {
       val recordSize = backing.readInt(i)
       val payload = backing.readLong(i + 4)
-      val children = readPointers(backing.readLong(i + 4 + 8)).flatten.toMap
+      val children = ArrayBuffer(readPointers(backing.readLong(i + 4 + 8)).flatten: _*)
 
       val prefix = backing.readBytes(i + 4 + 8 + 8, recordSize - 8 - 8)
       Some(CNode(i, children, payload, prefix))

@@ -1,8 +1,9 @@
 package trie
+import scala.collection.mutable.ArrayBuffer
 
 case class CNode(
     address: Long,
-    children: Map[Byte, Long],
+    children: ArrayBuffer[(Byte, Long)],
     payload: Long,
     prefix: Array[Byte]
 ) {
@@ -10,8 +11,8 @@ case class CNode(
 }
 
 object CNode {
-  def empty = CNode(-1L, Map(), -1L, Array())
-  def apply(children: Map[Byte, Long], payload: Long, prefix: Array[Byte]): CNode = CNode(-1L, children, payload, prefix)
+  def empty = CNode(-1L, ArrayBuffer(), -1L, Array())
+  def apply(children: ArrayBuffer[(Byte, Long)], payload: Long, prefix: Array[Byte]): CNode = CNode(-1L, children, payload, prefix)
 }
 
 trait CNodeReader {
@@ -67,12 +68,12 @@ object CTrie {
       case Right((lastNode, _)) => storage.updatePayload(lastNode, value)
       case Left((lastNode, prefix)) => {
         if (startsWith(key, prefix, 0, prefix.size, 0)) {
+
           val rest = drop(key, prefix.size)
-          val n = CNode(Map(), value, rest)
+          val n = CNode(ArrayBuffer(), value, rest)
           val n1 = storage.append(n)
           storage.updateRoute(lastNode.address, rest(0), n1.address)
         } else {
-
           val sharedP = sharedPrefix(key, prefix, 0)
           val keyRest = drop(key, sharedP)
           val lastNodePrefixRest = drop(prefix, sharedP)
@@ -82,14 +83,14 @@ object CTrie {
           val m1 = storage.append(m)
 
           if (keyRest.isEmpty) {
-            val routes = Map(lastNodePrefixRest.head -> m1.address)
+            val routes = ArrayBuffer(lastNodePrefixRest.head -> m1.address)
 
             storage.write(lastNode.copy(children = routes, prefix = lastNodePrefixUsed, payload = value))
           } else {
-            val n = CNode(Map(), value, keyRest)
+            val n = CNode(ArrayBuffer(), value, keyRest)
             val n1 = storage.append(n)
 
-            val routes = Map(
+            val routes = ArrayBuffer(
               keyRest.head -> n1.address,
               lastNodePrefixRest.head -> m1.address
             )
