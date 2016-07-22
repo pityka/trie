@@ -22,6 +22,7 @@ class LFileWriter(f: File) extends LFileReader(f) with Writer {
   def writeLong(l: Long, address: Long) = {
     remap(address, 8)
     map.putLong(address - mapStart, l)
+    fileSize += 8
   }
   def close = {
     map.flush
@@ -42,7 +43,7 @@ class LFileReader(f: File) extends Reader {
   def size = fileSize
   def remap(i: Long, size: Int): Unit = {
     if (i < mapStart || i + size > mapStart + mapSize) {
-      val size2 = math.max(size, 1024 * 1024)
+      val size2 = math.max(size, 1024 * 1024 * 100)
       val (mStart, mSize) =
         if (f.length - i > Long.MaxValue.toLong) (i, Long.MaxValue)
         else {
@@ -52,6 +53,8 @@ class LFileReader(f: File) extends Reader {
           (s, end - s)
         }
       // println(mStart -> mSize)
+      map.flush
+      map.close
       map = new MMapBuffer(f, mStart, mSize, MMapMode.READ_WRITE)
       mapStart = mStart
       mapSize = mSize
