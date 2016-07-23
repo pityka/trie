@@ -143,8 +143,8 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
     // assert(read(n.address).get.children == n.children)
     // assert(read(n.address).get.prefix.deep == n.prefix.deep)
   }
-  def updatePayload(old: CNode, n: Long) = {
-    backing.writeLong(n, old.address + 4)
+  def updatePayload(old: Long, n: Long) = {
+    backing.writeLong(n, old + 4)
   }
   def updateRoute(old: Long, b: Byte, a: Long) = {
     def update(b: Byte, a: Long, idx: Long, updateAddress: Long): Unit = {

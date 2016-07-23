@@ -25,7 +25,7 @@ trait CNodeReader {
 
 trait CNodeWriter extends CNodeReader {
   def write(n: CNode): Unit
-  def updatePayload(old: CNode, n: Long): Unit
+  def updatePayload(old: Long, n: Long): Unit
   def updateRoute(old: Long, b: Byte, a: Long): Unit
   def append(n: CNode): CNode
 }
@@ -65,15 +65,16 @@ object CTrie {
 
   def insert(key: Array[Byte], value: Long, storage: CNodeWriter, root: CNode): Unit = {
     queryNode(storage, key) match {
-      case Right((lastNode, _)) => storage.updatePayload(lastNode, value)
-      case Left((lastNode, prefix)) => {
+      case Right((lastNodeAddress, _)) => storage.updatePayload(lastNodeAddress, value)
+      case Left((lastNodeAddress, prefix)) => {
         if (startsWith(key, prefix, 0, prefix.size, 0)) {
 
           val rest = drop(key, prefix.size)
           val n = CNode(ArrayBuffer(), value, rest)
           val n1 = storage.append(n)
-          storage.updateRoute(lastNode.address, rest(0), n1.address)
+          storage.updateRoute(lastNodeAddress, rest(0), n1.address)
         } else {
+          val lastNode = storage.read(lastNodeAddress).get
           val sharedP = sharedPrefix(key, prefix, 0)
           val keyRest = drop(key, sharedP)
           val lastNodePrefixRest = drop(prefix, sharedP)
@@ -118,11 +119,16 @@ object CTrie {
   def prefixPayload(trie: CNodeReader, q: Array[Byte]): Vector[Long] = {
     val first = queryNode(trie, q)
     first match {
-      case Left((node, p)) => {
-        if (p.startsWith(q)) node.payload +: node.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
-        else Vector()
+      case Left((nodeAddress, p)) => {
+        if (p.startsWith(q)) {
+          val node = trie.read(nodeAddress).get
+          node.payload +: node.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
+        } else Vector()
       }
-      case Right((node, pl)) => node.payload +: node.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
+      case Right((nodeAddress, pl)) => {
+        val node = trie.read(nodeAddress).get
+        node.payload +: node.children.map(i => childrenPayload(trie, i._2)).flatten.toVector
+      }
     }
   }
 
@@ -160,15 +166,14 @@ object CTrie {
 
   }
 
-  def queryNode(trie: CNodeReader, q: Array[Byte]): Either[(CNode, Array[Byte]), (CNode, Long)] = {
+  def queryNode(trie: CNodeReader, q: Array[Byte]): Either[(Long, Array[Byte]), (Long, Long)] = {
 
     val (root, p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0)
     val (lastNodeAddress, prefix, prefixLen, succ) = loop(trie, root, p2, 0, off2, q)
-    val lastNode = trie.read(lastNodeAddress).get
 
-    if (succ) Right(lastNode -> lastNode.payload)
+    if (succ) Right(lastNodeAddress -> trie.readPayload(lastNodeAddress))
     else {
-      Left((lastNode, prefix.slice(0, prefixLen)))
+      Left((lastNodeAddress, prefix.slice(0, prefixLen)))
     }
 
   }

@@ -18,7 +18,7 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
   def readPointersFromHashTable(address: Long): ArrayBuffer[(Byte, Long)] = {
     if (address < 0) ArrayBuffer()
     else {
-      val ar = new ArrayBuffer[(Byte, Long)](16)
+      val ar = new scala.collection.immutable.VectorBuilder[(Byte, Long)]()
       var i = 0
       while (i < 16) {
         val bucket = backing.readLong(address + i * 8)
@@ -27,14 +27,14 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
           while (j < 8) {
             val ad = backing.readLong(bucket + j * 8)
             if (ad >= 0) {
-              ar.append((i * 8 + j).toByte -> ad)
+              ar += ((i * 8 + j).toByte -> ad)
             }
             j += 1
           }
         }
         i += 1
       }
-      ar
+      ArrayBuffer(ar.result: _*)
     }
   }
 
@@ -192,8 +192,8 @@ class CAHNodeWriter(backing: Writer) extends CAHNodeReader(backing) with CNodeWr
     // assert(read(n.address).get.children.toList == n.children.toList, read(n.address).get.children.toString + " " + n.children)
     // assert(read(n.address).get.prefix.deep == n.prefix.deep)
   }
-  def updatePayload(old: CNode, n: Long) = {
-    backing.writeLong(n, old.address + 4)
+  def updatePayload(old: Long, n: Long) = {
+    backing.writeLong(n, old + 4)
   }
   def updateRoute(old: Long, b: Byte, a: Long) = {
     def updateHashTable(b: Byte, a: Long, idx: Long, updateAddress: Long): Unit = {

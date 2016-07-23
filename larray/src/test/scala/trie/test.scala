@@ -39,7 +39,7 @@ class TrieSpec extends FunSpec with Matchers {
         ns.read(0).get.payload should equal(n1.payload)
         ns.read(0).get.children should equal(n1.children)
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
-        ns.updatePayload(n1, 3L)
+        ns.updatePayload(n1.address, 3L)
         ns.read(0).get.payload should equal(3L)
         ns.read(0).get.children should equal(n1.children)
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
@@ -76,7 +76,7 @@ class TrieSpec extends FunSpec with Matchers {
         ns.read(0).get.payload should equal(n1.payload)
         ns.read(0).get.children should equal(n1.children)
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
-        ns.updatePayload(n1, 3L)
+        ns.updatePayload(n1.address, 3L)
         ns.read(0).get.payload should equal(3L)
         ns.read(0).get.children should equal(n1.children)
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
@@ -112,7 +112,7 @@ class TrieSpec extends FunSpec with Matchers {
         ns.read(0).get.payload should equal(n1.payload)
         ns.read(0).get.children should equal(n1.children)
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
-        ns.updatePayload(n1, 3L)
+        ns.updatePayload(n1.address, 3L)
         ns.read(0).get.payload should equal(3L)
         ns.read(0).get.children should equal(n1.children)
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
@@ -294,7 +294,7 @@ class TrieSpec extends FunSpec with Matchers {
         def data = {
           val rnd = new scala.util.Random(1)
 
-          (0 to 10000000 iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
+          (0 to 1000000 iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
             .map(x => x._1.getBytes("US-ASCII") -> x._2.toLong)
         }
         val tmp = File.createTempFile("catrie", "dfsd")
