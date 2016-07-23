@@ -17,6 +17,7 @@ trait Writer extends Reader {
   def set(i: Long, v: Array[Byte]): Unit
   def close: Unit
   def writeLong(l: Long, idx: Long)
+  def writeByte(b: Byte, idx: Long)
 }
 
 trait JReader extends Reader {
@@ -61,6 +62,8 @@ trait JWriter extends JReader with Writer {
     val ar = ByteBuffer.wrap(longBuffer).order(ByteOrder.LITTLE_ENDIAN).putLong(l)
     set(idx, longBuffer)
   }
+
+  def writeByte(b: Byte, idx: Long) = set(idx, Array(b))
 
 }
 

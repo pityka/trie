@@ -59,7 +59,7 @@ class TrieSpec extends FunSpec with Matchers {
     }
 
     describe("cahnode adaptive storage " + name) {
-      it("simple") {
+      it("short") {
         val n1 = CNode(ArrayBuffer(1.toByte -> 13L), 113L, Array[Byte](0, 1)).copy(address = 0L)
         val n2 = CNode(ArrayBuffer(), 114L, Array[Byte](0, 1, 2, 3))
         val s = newstorage()
@@ -84,6 +84,42 @@ class TrieSpec extends FunSpec with Matchers {
 
         ns.read(0).get.payload should equal(3L)
         ns.read(0).get.children should equal(n1.children :+ (2, 3L))
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
+
+        0 to 48 map { i =>
+          ns.updateRoute(n1.address, i.toByte, i.toLong)
+        }
+
+        ns.read(0).get.children.take(49).toMap should equal(0 to 48 map (x => x.toByte -> x.toLong) toMap)
+        // ns.append(ns.read(0).get).children.toVector should equal(ns.read(0).get.children.toVector)
+
+      }
+      it("hash") {
+        val n1 = CNode(ArrayBuffer(1.toByte -> 13L, 2.toByte -> 14L, 3.toByte -> 15L), 113L, Array[Byte](0, 1)).copy(address = 0L)
+        val s = newstorage()
+        val ns = new CAHNodeWriter(s)
+        ns.append(n1)
+        ns.read(0).get.payload should equal(n1.payload)
+        ns.read(0).get.children should equal(n1.children)
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
+        ns.readAddress(0, 1) should equal(13L)
+        ns.readAddress(0, 2) should equal(14L)
+        ns.readAddress(0, 3) should equal(15L)
+        val buf = Array[Byte](3, 2, 1)
+        val (a1, a2, a3) = ns.readPartial(0, buf, 1)
+        (a1, a2.toVector, a3) should equal((0, List[Byte](3, 0, 1), 3))
+        // // ns.append(n2)
+        ns.read(0).get.payload should equal(n1.payload)
+        ns.read(0).get.children should equal(n1.children)
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
+        ns.updatePayload(n1, 3L)
+        ns.read(0).get.payload should equal(3L)
+        ns.read(0).get.children should equal(n1.children)
+        ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
+        ns.updateRoute(n1.address, 2, 3L)
+
+        ns.read(0).get.payload should equal(3L)
+        ns.read(0).get.children should equal(ArrayBuffer(1.toByte -> 13L, 2.toByte -> 3L, 3.toByte -> 15L))
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
 
         0 to 48 map { i =>
@@ -181,18 +217,14 @@ class TrieSpec extends FunSpec with Matchers {
   def bigTest(openWriter: (File) => Writer, openReader: File => Reader, name: String, openNodeWriter: Writer => CNodeWriter, openNodeReader: Reader => CNodeReader) = {
     describe("big") {
 
-      it("kmer" + name) {
-        def kmer(i: Int, c: List[Byte], acc: List[Vector[Byte]]): List[Vector[Byte]] =
-          if (i == 0) acc
-          else kmer(i - 1, c, c.flatMap(c => acc.map(v => v :+ c)))
+      it("digits " + name) {
 
         val buf = Array.ofDim[Byte](50)
-        val alphabet = List('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o').map(_.toByte)
-        val data = kmer(4, alphabet, alphabet.toList.map(x => Vector(x))).zipWithIndex.map(x => x._1.toArray -> x._2.toLong)
+        val data = (0 until 1000000).toList.map(_.toString.getBytes("US-ASCII")).zipWithIndex.map(x => x._1.toArray -> x._2.toLong)
         val random = new scala.util.Random(3)
         val data1 = random.shuffle(data)
         val data2 = random.shuffle(data)
-        println("kmers size: " + data.size)
+        println("digits size: " + data.size)
         val tmp = File.createTempFile("catrie", "dfsd")
         println(tmp)
         val s = openWriter(tmp) //FileWriter.open(tmp)
@@ -208,12 +240,12 @@ class TrieSpec extends FunSpec with Matchers {
         val ts = data2.map {
           case (k, v) =>
             val t1 = System.nanoTime
-            CTrie.prefixPayload(ns2, k) should equal(Vector(v))
+            CTrie.query(ns2, k) should equal(Some(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
         data2.foreach {
           case (k, v) =>
-            CTrie.prefixPayload(ns2, k) should equal(Vector(v))
+            CTrie.query(ns2, k) should equal(Some(v))
         }
         println(name + " " + ts.sorted.apply(ts.size / 2))
         println(name + " " + ts.sorted.apply((ts.size * 0.25).toInt))
@@ -227,8 +259,8 @@ class TrieSpec extends FunSpec with Matchers {
           (System.nanoTime - t1) / 1E9
         }
         println(name + " " + tmax.min + " " + tmax.sorted.apply(5000) + " " + tmax.max)
-        println(name + " kmer: " + tmp.length / 1024 / 1024)
-        println(name + " kmer nodes: " + CTrie.traverse(ns2).size)
+        println(name + " digits: " + tmp.length / 1024 / 1024)
+        println(name + " digits nodes: " + CTrie.traverse(ns2).size)
 
         println(name + " copying..")
         val tmp2 = File.createTempFile("catrie", "dfsd")
@@ -242,7 +274,7 @@ class TrieSpec extends FunSpec with Matchers {
         val ts2 = data2.map {
           case (k, v) =>
             val t1 = System.nanoTime
-            CTrie.prefixPayload(ns4, k) should equal(Vector(v))
+            CTrie.query(ns4, k) should equal(Some(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
         println(name + " " + ts2.sorted.apply(ts.size / 2))
@@ -250,8 +282,8 @@ class TrieSpec extends FunSpec with Matchers {
         println(name + " " + ts2.sorted.apply((ts.size * 0.75).toInt))
         println(name + " " + ts2.min)
         println(name + " " + ts2.zipWithIndex.maxBy(_._1))
-        println(name + " kmer copied: " + tmp2.length / 1024 / 1024)
-        println(name + " kmer nodes: " + CTrie.traverse(ns4).size)
+        println(name + " digits copied: " + tmp2.length / 1024 / 1024)
+        println(name + " digits nodes: " + CTrie.traverse(ns4).size)
         tmp2.delete
         tmp.delete
       }
@@ -262,7 +294,7 @@ class TrieSpec extends FunSpec with Matchers {
         def data = {
           val rnd = new scala.util.Random(1)
 
-          (0 to 100000000 iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
+          (0 to 10000000 iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
             .map(x => x._1.getBytes("US-ASCII") -> x._2.toLong)
         }
         val tmp = File.createTempFile("catrie", "dfsd")

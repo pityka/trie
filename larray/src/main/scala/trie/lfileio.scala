@@ -24,6 +24,11 @@ class LFileWriter(f: File) extends LFileReader(f) with Writer {
     map.putLong(address - mapStart, l)
     fileSize += 8
   }
+  def writeByte(l: Byte, address: Long) = {
+    remap(address, 1)
+    map.putByte(address - mapStart, l)
+    fileSize += 1
+  }
   def close = {
     map.flush
     val fc = FileChannel.open(f.toPath, READ, WRITE)
@@ -41,9 +46,9 @@ class LFileReader(f: File) extends Reader {
   var mapSize = f.length.toLong
   var fileSize = f.length
   def size = fileSize
-  def remap(i: Long, size: Int): Unit = {
-    if (i < mapStart || i + size > mapStart + mapSize) {
-      val size2 = math.max(size, 1024 * 1024 * 100)
+  def remap(i: Long, newsize: Int): Unit = {
+    if (i < mapStart || i + newsize > mapStart + mapSize) {
+      val size2 = math.max(newsize, size + 1024 * 1024 * 100)
       val (mStart, mSize) =
         if (f.length - i > Long.MaxValue.toLong) (i, Long.MaxValue)
         else {
