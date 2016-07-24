@@ -95,7 +95,9 @@ class CANodeReader(backing: Reader) extends CNodeReader {
         System.arraycopy(buffer, 0, ar, 0, offset)
         ar
       }
-      backing.readBytesInto(i + 4 + 8 + 8, buf2, offset, bufferSize)
+      if (bufferSize > 0) {
+        backing.readBytesInto(i + 4 + 8 + 8, buf2, offset, bufferSize)
+      }
       (i, buf2, offset + bufferSize)
     }
 }
@@ -149,12 +151,13 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
   def updateRoute(old: Long, b: Byte, a: Long) = {
     def update(b: Byte, a: Long, idx: Long, updateAddress: Long): Unit = {
       val elems = readPointers1(idx)
-      val next = backing.readLong(idx + PointerRecordSize - 8)
+
       if (elems.map(_._1).contains(b)) {
         val idx2 = elems.zipWithIndex.find(_._1._1 == b).map(_._2).get
         backing.writeLong(a, idx + 1 + GroupSize + idx2 * 8)
       } else {
         if (elems.size == GroupSize) {
+          val next = backing.readLong(idx + PointerRecordSize - 8)
           if (next >= 0) update(b, a, next, idx + 1 + GroupSize + GroupSize * 8)
           else {
             val nidx = backing.size

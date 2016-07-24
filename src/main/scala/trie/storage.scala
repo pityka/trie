@@ -84,8 +84,12 @@ class InMemoryStorage extends JReader with JWriter {
   }
   def get(i: Long): Byte = backing(i.toInt)
   def get(i: Long, buf: Array[Byte], s: Int, l: Int) = {
-    val tmp = backing.slice(i.toInt, l + i.toInt).toArray
-    System.arraycopy(tmp, 0, buf, s, tmp.size)
+    var j = 0
+    val ii = i.toInt
+    while (j < l) {
+      buf(s + j) = backing(ii + j)
+      j += 1
+    }
   }
   override def toString = backing.toString
   def close = ()

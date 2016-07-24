@@ -43,7 +43,9 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
     else {
 
       val h = b / 8
+      // val t1 = System.nanoTime
       val bucket = backing.readLong(i + h * 8)
+      // println(System.nanoTime - t1)
       if (bucket < 0) -1L
       else backing.readLong(bucket + (b % 8) * 8)
 

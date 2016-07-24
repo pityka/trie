@@ -202,7 +202,7 @@ class TrieSpec extends FunSpec with Matchers {
 
   }
 
-  tests(() => new InMemoryStorage, "inmemory")
+  // tests(() => new InMemoryStorage, "inmemory")
   // tests(() => new InMemoryStorageLArray, "inmemorylarray")
   // tests(() => {
   //   val tmp = File.createTempFile("dfs", "dfsd")
@@ -214,26 +214,27 @@ class TrieSpec extends FunSpec with Matchers {
   //   new LFileWriter(tmp)
   // }, "lfile")
 
-  def bigTest(openWriter: (File) => Writer, openReader: File => Reader, name: String, openNodeWriter: Writer => CNodeWriter, openNodeReader: Reader => CNodeReader) = {
-    describe("big") {
+  def bigTest(dataSize: Int, openWriter: (File) => Writer, openReader: File => Reader, name: String, openNodeWriter: Writer => CNodeWriter, openNodeReader: Reader => CNodeReader) = {
+    describe("big " + dataSize) {
 
       it("digits " + name) {
 
         val buf = Array.ofDim[Byte](50)
-        val data = (0 until 1000000).toList.map(_.toString.getBytes("US-ASCII")).zipWithIndex.map(x => x._1.toArray -> x._2.toLong)
+        val data = (0 until dataSize)
+          .toList.map(_.toString.getBytes("US-ASCII")).zipWithIndex.map(x => x._1.toArray -> x._2.toLong)
         val random = new scala.util.Random(3)
         val data1 = random.shuffle(data)
         val data2 = random.shuffle(data)
-        println("digits size: " + data.size)
+        println("digits data size: " + data.size)
         val tmp = File.createTempFile("catrie", "dfsd")
-        println(tmp)
+        println("digits file " + tmp)
         val s = openWriter(tmp) //FileWriter.open(tmp)
 
         val ns = openNodeWriter(s)
         val t1 = System.nanoTime
         CTrie.build(data1.iterator, ns)
         s.close
-        println(name + " " + (System.nanoTime - t1) / 1E9)
+        println("digits " + name + " build time " + (System.nanoTime - t1) / 1E9)
 
         val s2 = openReader(tmp) //FileReader.open(tmp)
         val ns2 = openNodeReader(s2)
@@ -247,24 +248,24 @@ class TrieSpec extends FunSpec with Matchers {
           case (k, v) =>
             CTrie.query(ns2, k) should equal(Some(v))
         }
-        println(name + " " + ts.sorted.apply(ts.size / 2))
-        println(name + " " + ts.sorted.apply((ts.size * 0.25).toInt))
-        println(name + " " + ts.sorted.apply((ts.size * 0.75).toInt))
-        println(name + " " + ts.min)
-        println(name + " " + ts.zipWithIndex.maxBy(_._1))
+        println("digits " + name + " read median " + ts.sorted.apply(ts.size / 2))
+        println("digits " + name + "1q " + ts.sorted.apply((ts.size * 0.25).toInt))
+        println("digits " + name + "3q " + ts.sorted.apply((ts.size * 0.75).toInt))
+        println("digits " + name + "min " + ts.min)
+        println("digits " + name + "max " + ts.zipWithIndex.maxBy(_._1))
         val max = data(ts.zipWithIndex.maxBy(_._1)._2)._1
         val tmax = 0 until 10000 map { i =>
           val t1 = System.nanoTime
           CTrie.query(ns2, max)
           (System.nanoTime - t1) / 1E9
         }
-        println(name + " " + tmax.min + " " + tmax.sorted.apply(5000) + " " + tmax.max)
-        println(name + " digits: " + tmp.length / 1024 / 1024)
-        println(name + " digits nodes: " + CTrie.traverse(ns2).size)
+        println("digits " + name + " " + tmax.min + " " + tmax.sorted.apply(5000) + " " + tmax.max)
+        println("digits " + name + " digits: " + tmp.length / 1024 / 1024)
+        println("digits " + name + " digits nodes: " + CTrie.traverse(ns2).size)
 
-        println(name + " copying..")
+        println("digits " + name + " copying..")
         val tmp2 = File.createTempFile("catrie", "dfsd")
-        println(tmp2)
+        println("digits copy" + tmp2)
         val s3 = openWriter(tmp2)
         val ns3 = openNodeWriter(s3)
         CTrie.copy(ns2, ns3)
@@ -277,35 +278,35 @@ class TrieSpec extends FunSpec with Matchers {
             CTrie.query(ns4, k) should equal(Some(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
-        println(name + " " + ts2.sorted.apply(ts.size / 2))
-        println(name + " " + ts2.sorted.apply((ts.size * 0.25).toInt))
-        println(name + " " + ts2.sorted.apply((ts.size * 0.75).toInt))
-        println(name + " " + ts2.min)
-        println(name + " " + ts2.zipWithIndex.maxBy(_._1))
-        println(name + " digits copied: " + tmp2.length / 1024 / 1024)
-        println(name + " digits nodes: " + CTrie.traverse(ns4).size)
+        println("digits " + name + " copy q 2q " + ts2.sorted.apply(ts.size / 2))
+        println("digits " + name + "1q " + ts2.sorted.apply((ts.size * 0.25).toInt))
+        println("digits " + name + "2q " + ts2.sorted.apply((ts.size * 0.75).toInt))
+        println("digits " + name + "min " + ts2.min)
+        println("digits " + name + "max " + ts2.zipWithIndex.maxBy(_._1))
+        println("digits " + name + "  copied: " + tmp2.length / 1024 / 1024)
+        println("digits " + name + "  nodes: " + CTrie.traverse(ns4).size)
         tmp2.delete
         tmp.delete
       }
 
-      it("random " + name) {
+      ignore("random " + name) {
         val buf = Array.ofDim[Byte](50)
         val alphabet = Array('a', 'b', 'c')
         def data = {
           val rnd = new scala.util.Random(1)
 
-          (0 to 1000000 iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
+          (0 to dataSize iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
             .map(x => x._1.getBytes("US-ASCII") -> x._2.toLong)
         }
         val tmp = File.createTempFile("catrie", "dfsd")
-        println(tmp)
+        println("random " + tmp)
         val s = openWriter(tmp)
 
         val ns = openNodeWriter(s)
         val t1 = System.nanoTime
         CTrie.build(data, ns)
         s.close
-        println(name + " " + (System.nanoTime - t1) / 1E9)
+        println("random " + name + " build time " + (System.nanoTime - t1) / 1E9)
 
         val s2 = openReader(tmp)
         val ns2 = openNodeReader(s2)
@@ -315,28 +316,28 @@ class TrieSpec extends FunSpec with Matchers {
             CTrie.query(ns2, k) should equal(Some(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
-        println(name + " " + ts.sorted.apply(ts.size / 2))
-        println(name + " " + ts.sorted.apply((ts.size * 0.25).toInt))
-        println(name + " " + ts.sorted.apply((ts.size * 0.75).toInt))
-        println(name + " " + ts.min)
-        println(name + " " + ts.zipWithIndex.maxBy(_._1))
+        println("random " + name + " 2q " + ts.sorted.apply(ts.size / 2))
+        println("random " + name + " 1q" + ts.sorted.apply((ts.size * 0.25).toInt))
+        println("random " + name + " 3q" + ts.sorted.apply((ts.size * 0.75).toInt))
+        println("random " + name + " min" + ts.min)
+        println("random " + name + " max" + ts.zipWithIndex.maxBy(_._1))
         CTrie.query(ns2, "abc".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "c".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "aaa".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "bba".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "bbb".getBytes("US-ASCII")) should equal(None)
-        println("random :" + tmp.length / 1024 / 1024)
-        println(name + " random nodes: " + CTrie.traverse(ns2).size)
+        println("random file size:" + tmp.length / 1024 / 1024)
+        println("random " + name + " random nodes: " + CTrie.traverse(ns2).size)
 
-        println(name + " copying..")
+        println("random " + name + " copying..")
         val tmp2 = File.createTempFile("catrie", "dfsd")
-        println(tmp2)
+        println("random " + tmp2)
         val s3 = openWriter(tmp2)
         val ns3 = openNodeWriter(s3)
         val ct1 = System.nanoTime
         CTrie.copy(ns2, ns3)
         s3.close
-        println("copy took: " + (System.nanoTime - ct1) / 1E9)
+        println("random " + "copy took: " + (System.nanoTime - ct1) / 1E9)
         val s4 = openReader(tmp2)
         val ns4 = openNodeReader(s4)
         val ts2 = data.map {
@@ -345,13 +346,13 @@ class TrieSpec extends FunSpec with Matchers {
             CTrie.prefixPayload(ns4, k) should equal(Vector(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
-        println(name + " " + ts2.sorted.apply(ts.size / 2))
-        println(name + " " + ts2.sorted.apply((ts.size * 0.25).toInt))
-        println(name + " " + ts2.sorted.apply((ts.size * 0.75).toInt))
-        println(name + " " + ts2.min)
-        println(name + " " + ts2.zipWithIndex.maxBy(_._1))
-        println(name + " random copied: " + tmp2.length / 1024 / 1024)
-        println(name + " random nodes: " + CTrie.traverse(ns4).size)
+        println("random " + name + " 2q" + ts2.sorted.apply(ts.size / 2))
+        println("random " + name + " 1q" + ts2.sorted.apply((ts.size * 0.25).toInt))
+        println("random " + name + " 3q" + ts2.sorted.apply((ts.size * 0.75).toInt))
+        println("random " + name + " min" + ts2.min)
+        println("random " + name + " max" + ts2.zipWithIndex.maxBy(_._1))
+        println("random " + name + " random copied: " + tmp2.length / 1024 / 1024)
+        println("random " + name + " random nodes: " + CTrie.traverse(ns4).size)
         tmp2.delete
         tmp.delete
       }
@@ -365,21 +366,21 @@ class TrieSpec extends FunSpec with Matchers {
   // )
   //
   // bigTest(
-  //   (f: File) => new LFileWriter(f),
-  //   (f: File) => new LFileReader(f),
-  //   "larray-ca",
-  //   (s: Writer) => new CANodeWriter(s),
-  //   (s: Reader) => new CANodeReader(s)
+  //   100000,
+  //   (f: File) => FileWriter.open(f),
+  //   (f: File) => FileReader.open(f),
+  //   "nio-caH",
+  //   (s: Writer) => new CAHNodeWriter(s),
+  //   (s: Reader) => new CAHNodeReader(s)
   // )
 
+  val inmemory = new InMemoryStorage
   bigTest(
-    (f: File) => new LFileWriter(f),
-    (f: File) => new LFileReader(f),
-    "larray-caH",
+    100000,
+    (f: File) => inmemory,
+    (f: File) => inmemory,
+    "inmemory-caH",
     (s: Writer) => new CAHNodeWriter(s),
     (s: Reader) => new CAHNodeReader(s)
   )
-
-  // val inmemory = new InMemoryStorageLArray
-  // bigTest((f: File) => inmemory, (f: File) => inmemory, "inmemory larray")
 }
