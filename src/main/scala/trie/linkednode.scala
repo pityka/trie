@@ -67,7 +67,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
   }
 
   val m1 = Array.fill(256)(-1L)
-  def read(i: Long): Option[CNode] = {
+  def read(i: Long, l: Int): Option[CNode] = {
     if (backing.size >= i + 4) {
       val recordSize = backing.readInt(i)
       val payload = backing.readLong(i + 4)
@@ -78,14 +78,14 @@ class CANodeReader(backing: Reader) extends CNodeReader {
     } else None
   }
 
-  def readAddress(i: Long, b: Byte): Long = {
+  def readAddress(i: Long, b: Byte, l: Int): Long = {
     readPointer(backing.readLong(i + 4 + 8), b)
   }
 
-  def readPayload(i: Long): Long =
+  def readPayload(i: Long, l: Int): Long =
     backing.readLong(i + 4)
 
-  def readPartial(i: Long, buffer: Array[Byte], offset: Int): (Long, Array[Byte], Int) =
+  def readPartial(i: Long, buffer: Array[Byte], offset: Int, l: Int): (Array[Byte], Int) =
     {
       val recordSize = backing.readInt(i)
       val bufferSize = recordSize - 16
@@ -98,7 +98,7 @@ class CANodeReader(backing: Reader) extends CNodeReader {
       if (bufferSize > 0) {
         backing.readBytesInto(i + 4 + 8 + 8, buf2, offset, bufferSize)
       }
-      (i, buf2, offset + bufferSize)
+      (buf2, offset + bufferSize)
     }
 }
 
@@ -186,7 +186,7 @@ class CANodeWriter(backing: Writer) extends CANodeReader(backing) with CNodeWrit
 
     update(b, a, backing.readLong(old + 4 + 8), old + 4 + 8)
   }
-  def append(n: CNode) = {
+  def append(n: CNode, level_unused: Int) = {
     val m = n.copy(address = backing.size)
     write(m)
     m

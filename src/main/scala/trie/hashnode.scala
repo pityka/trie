@@ -88,7 +88,7 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
     }
   }
 
-  def read(i: Long): Option[CNode] = {
+  def read(i: Long, l: Int): Option[CNode] = {
     if (backing.size >= i + 4) {
       val recordSize = backing.readInt(i)
       val ar = backing.readBytes(i + 4, recordSize)
@@ -119,7 +119,7 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
     } else None
   }
 
-  def readAddress(i: Long, b: Byte): Long = {
+  def readAddress(i: Long, b: Byte, l: Int): Long = {
     backing.readBytesInto(i + 4 + 8, nodeSmallBuffer, 0, nodeSmallBuffer.size)
     val bb = ByteBuffer.wrap(nodeSmallBuffer).order(ByteOrder.LITTLE_ENDIAN)
     if (bb.get == HashNode) {
@@ -142,10 +142,10 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
     }
   }
 
-  def readPayload(i: Long): Long =
+  def readPayload(i: Long, l: Int): Long =
     backing.readLong(i + 4)
 
-  def readPartial(i: Long, buffer: Array[Byte], offset: Int): (Long, Array[Byte], Int) =
+  def readPartial(i: Long, buffer: Array[Byte], offset: Int, l: Int): (Array[Byte], Int) =
     {
       val recordSize = backing.readInt(i)
       val bufferSize = recordSize - 8 - 8 - 8 - 3
@@ -156,7 +156,7 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
         ar
       }
       backing.readBytesInto(i + 4 + 8 + 3 + 8 + 8, buf2, offset, bufferSize)
-      (i, buf2, offset + bufferSize)
+      (buf2, offset + bufferSize)
     }
 }
 
@@ -314,7 +314,7 @@ class CAHNodeWriter(backing: Writer) extends CAHNodeReader(backing) with CNodeWr
     }
 
   }
-  def append(n: CNode) = {
+  def append(n: CNode, level_unused: Int) = {
     val m = n.copy(address = backing.size)
     write(m)
     m
