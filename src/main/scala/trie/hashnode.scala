@@ -10,7 +10,6 @@ import scala.collection.mutable.ArrayBuffer
 class CAHNodeReader(backing: Reader) extends CNodeReader {
   val bufInt = Array.fill[Byte](4)(0)
   val bufLong = Array.fill[Byte](8)(0)
-  var prefixBuffer = Array.ofDim[Byte](1000)
   val tableBuffer = Array.ofDim[Byte](128)
   val pointerBuffer = Array.ofDim[Byte](64)
   val nodeSmallBuffer = Array.ofDim[Byte](19)

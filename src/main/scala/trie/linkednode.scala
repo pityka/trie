@@ -12,7 +12,6 @@ class CANodeReader(backing: Reader) extends CNodeReader {
   val elemsLongBuffer = Array.ofDim[Long](GroupSize)
   val prBuffer = Array.ofDim[Byte](PointerRecordSize)
   val pointerRecordBuffer = Array.ofDim[Byte](PointerRecordSize)
-  var prefixBuffer = Array.ofDim[Byte](1000)
 
   def readPointers1(address: Long): Array[(Byte, Long)] = {
     if (address < 0) Array()

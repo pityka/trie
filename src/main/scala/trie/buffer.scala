@@ -15,65 +15,67 @@ class BufferedCNodeReader(
 
   def read(i: Long, level: Int): Option[CNode] = mmap.get(i) match {
     case None => {
-
+      hitmiss += 1
       val r = slow.read(i)
-      if (level <= maxLevel && r.isDefined) {
+      if (level < maxLevel && r.isDefined && !mmap.contains(i)) {
         val n = fast.append(r.get, level)
         mmap.update(i, n.address)
 
       }
       r
     }
-    case Some(x) => fast.read(x, level).map(_.copy(address = i))
+    case Some(x) => {
+      hitcount += 1
+      fast.read(x, level).map(_.copy(address = i))
+    }
   }
   def readAddress(i: Long, b: Byte, l: Int): Long = mmap.get(i) match {
     case None => {
-      if (l <= maxLevel) {
+      hitmiss += 1
+      if (l < maxLevel) {
         val r = slow.read(i)
-        if (r.isDefined) {
-          val n = fast.append(r.get, l)
-          mmap.update(i, n.address)
-          fast.readAddress(n.address, b)
-        } else slow.readAddress(i, b)
-      } else slow.readAddress(i, b)
+        val n = fast.append(r.get, l)
+        mmap.update(i, n.address)
+        fast.readAddress(n.address, b, l)
+      } else slow.readAddress(i, b, l)
     }
-    case Some(x) => fast.readAddress(x, b)
+    case Some(x) => {
+      hitcount += 1
+      fast.readAddress(x, b)
+    }
   }
 
   def readPayload(i: Long, l: Int): Long = mmap.get(i) match {
     case None => {
-      {
-        if (l <= maxLevel) {
-          val r = slow.read(i)
-          if (r.isDefined) {
-            val n = fast.append(r.get, l)
-            mmap.update(i, n.address)
-            fast.readPayload(n.address)
-          } else slow.readPayload(i)
-        } else slow.readPayload(i)
-      }
-
+      hitmiss += 1
+      if (l < maxLevel) {
+        val r = slow.read(i).get
+        val n = fast.append(r, l)
+        mmap.update(i, n.address)
+        r.payload
+      } else slow.readPayload(i)
     }
-    case Some(x) => fast.readPayload(x)
+    case Some(x) => {
+      hitcount += 1
+      fast.readPayload(x)
+    }
   }
   def readPartial(i: Long, buffer: Array[Byte], offset: Int, l: Int): (Array[Byte], Int) = mmap.get(i) match {
-    case None => {
-      {
-        if (l <= maxLevel) {
-          val r = slow.read(i)
-          if (r.isDefined) {
-            val n = fast.append(r.get, l)
-            mmap.update(i, n.address)
-            fast.readPartial(n.address, buffer, offset)
-          } else slow.readPartial(i, buffer, offset)
-        } else slow.readPartial(i, buffer, offset)
-      }
-    }
+    case None =>
+      hitmiss += 1
+      if (l < maxLevel) {
+        val r = slow.read(i)
+        val n = fast.append(r.get, l)
+        mmap.update(i, n.address)
+        fast.readPartial(n.address, buffer, offset)
+      } else slow.readPartial(i, buffer, offset)
 
-    case Some(x) => fast.readPartial(x, buffer, offset)
+    case Some(x) => {
+      hitcount += 1
+      fast.readPartial(x, buffer, offset)
+    }
   }
 
-  var prefixBuffer: Array[Byte] = Array.ofDim[Byte](1000)
 }
 
 class BufferedCNodeWriter(
@@ -95,7 +97,7 @@ class BufferedCNodeWriter(
   def append(n: CNode, l: Int) = {
     val r = slow.append(n, l)
 
-    if (l <= maxLevel) {
+    if (l < maxLevel) {
       val n2 = fast.append(n, l).address
       mmap.update(r.address, n2)
     }

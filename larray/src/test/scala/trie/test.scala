@@ -360,11 +360,10 @@ class TrieSpec extends FunSpec with Matchers {
 
       it("random " + name) {
         val buf = Array.ofDim[Byte](50)
-        val alphabet = Array('a', 'b', 'c')
         def data = {
           val rnd = new scala.util.Random(1)
 
-          (0 to dataSize iterator).map(i => 0 to 300 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
+          (0 to dataSize iterator).map(i => 0 to 16 map (j => rnd.nextPrintableChar) mkString).zipWithIndex
             .map(x => x._1.getBytes("US-ASCII") -> x._2.toLong)
         }
         val tmp = File.createTempFile("catrie", "dfsd")
@@ -374,9 +373,14 @@ class TrieSpec extends FunSpec with Matchers {
         val ns = openNodeWriter(s)
         val t1 = System.nanoTime
         CTrie.build(data, ns)
+        ns match {
+          case x: BufferedCNodeReader => println(x.inmemory2.size)
+        }
         s.close
         println("random " + name + " build time " + (System.nanoTime - t1) / 1E9)
-
+        println(ns.counter.zipWithIndex.filter(_._1 > 0).sortBy(_._1).toList)
+        println(ns.hitcount.toDouble / (ns.hitmiss + ns.hitcount))
+        println(ns.inserttimer.toDouble / ns.insertcount)
         val s2 = openReader(tmp)
         val ns2 = openNodeReader(s2)
         val ts = data.map {
@@ -460,11 +464,11 @@ class TrieSpec extends FunSpec with Matchers {
     (f: File) => FileReader.open(f),
     "buffered-caH",
     (s: Writer) => {
-      new BufferedCNodeWriter(new CAHNodeWriter(s), 7)
+      new BufferedCNodeWriter(new CAHNodeWriter(s), 3)
     },
     (s: Reader) => {
 
-      new BufferedCNodeReader(new CAHNodeReader(s), 7)
+      new BufferedCNodeReader(new CAHNodeReader(s), 3)
     }
   )
 }

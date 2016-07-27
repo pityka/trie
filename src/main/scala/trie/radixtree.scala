@@ -20,13 +20,18 @@ trait CNodeReader {
   def readAddress(i: Long, b: Byte, l: Int): Long
   def readPayload(i: Long, l: Int): Long
   def readPartial(i: Long, buffer: Array[Byte], offset: Int, l: Int): (Array[Byte], Int)
-  var prefixBuffer: Array[Byte]
+
+  var prefixBuffer: Array[Byte] = Array.ofDim[Byte](1000)
 
   def read(i: Long): Option[CNode] = read(i, 0)
   def readAddress(i: Long, b: Byte): Long = readAddress(i, b, 0)
   def readPayload(i: Long): Long = readPayload(i, 0)
   def readPartial(i: Long, buffer: Array[Byte], offset: Int): (Array[Byte], Int) =
     readPartial(i, buffer, offset, 0)
+
+  var counter: Array[Int] = Array.fill(1000)(0)
+  var hitcount = 0
+  var hitmiss = 0
 }
 
 trait CNodeWriter extends CNodeReader {
@@ -34,6 +39,9 @@ trait CNodeWriter extends CNodeReader {
   def updatePayload(old: Long, n: Long): Unit
   def updateRoute(old: Long, b: Byte, a: Long): Unit
   def append(n: CNode, l: Int): CNode
+
+  var inserttimer = 0L
+  var insertcount = 0L
 }
 
 object CTrie {
@@ -70,7 +78,9 @@ object CTrie {
     }
 
   def insert(key: Array[Byte], value: Long, storage: CNodeWriter, root: CNode): Unit = {
-    queryNode(storage, key) match {
+    storage.insertcount += 1
+    val t1 = System.nanoTime
+    val r = queryNode(storage, key) match {
       case Right((lastNodeAddress, level, _)) => storage.updatePayload(lastNodeAddress, value)
       case Left((lastNodeAddress, level, prefix)) => {
         if (startsWith(key, prefix, 0, prefix.size, 0)) {
@@ -110,7 +120,10 @@ object CTrie {
         }
       }
     }
+    storage.inserttimer += (System.nanoTime - t1)
     // assert(query(storage, key).get == value)
+    r
+
   }
 
   def build(data: Iterator[(Array[Byte], Long)], storage: CNodeWriter): Unit = {
@@ -179,7 +192,7 @@ object CTrie {
     val (p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0, 0)
     val root = 0
     val (lastNodeAddress, prefix, prefixLen, succ, level) = loop(trie, root, p2, 0, off2, q, 0)
-
+    trie.counter(level) += 1
     if (succ) Right((lastNodeAddress, level, trie.readPayload(lastNodeAddress, level)))
     else {
       Left((lastNodeAddress, level, prefix.slice(0, prefixLen)))
