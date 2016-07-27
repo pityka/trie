@@ -378,22 +378,39 @@ class TrieSpec extends FunSpec with Matchers {
         }
         s.close
         println("random " + name + " build time " + (System.nanoTime - t1) / 1E9)
-        println(ns.counter.zipWithIndex.filter(_._1 > 0).sortBy(_._1).toList)
-        println(ns.hitcount.toDouble / (ns.hitmiss + ns.hitcount))
-        println(ns.inserttimer.toDouble / ns.insertcount)
+        println("level stat" + ns.counter.zipWithIndex.filter(_._1 > 0).sortBy(_._1).toList)
+        println("hit rate " + ns.hitcount.toDouble / (ns.hitmiss + ns.hitcount))
+        println("mean insert ns " + ns.inserttimer.toDouble / ns.insertcount)
         val s2 = openReader(tmp)
         val ns2 = openNodeReader(s2)
-        val ts = data.map {
-          case (k, v) =>
-            val t1 = System.nanoTime
-            CTrie.query(ns2, k) should equal(Some(v))
-            (System.nanoTime - t1) / 1E9
-        }.toVector
-        println("random " + name + " 2q " + ts.sorted.apply(ts.size / 2))
-        println("random " + name + " 1q" + ts.sorted.apply((ts.size * 0.25).toInt))
-        println("random " + name + " 3q" + ts.sorted.apply((ts.size * 0.75).toInt))
-        println("random " + name + " min" + ts.min)
-        println("random " + name + " max" + ts.zipWithIndex.maxBy(_._1))
+
+        {
+          val ts = data.map {
+            case (k, v) =>
+              val t1 = System.nanoTime
+              CTrie.query(ns2, k) should equal(Some(v))
+              (System.nanoTime - t1) / 1E9
+          }.toVector
+          println("random " + name + " 2q " + ts.sorted.apply(ts.size / 2))
+          println("random " + name + " 1q" + ts.sorted.apply((ts.size * 0.25).toInt))
+          println("random " + name + " 3q" + ts.sorted.apply((ts.size * 0.75).toInt))
+          println("random " + name + " min" + ts.min)
+          println("random " + name + " max" + ts.zipWithIndex.maxBy(_._1))
+        }
+
+        {
+          val ts = data.map {
+            case (k, v) =>
+              val t1 = System.nanoTime
+              CTrie.query(ns2, k) should equal(Some(v))
+              (System.nanoTime - t1) / 1E9
+          }.toVector
+          println("random " + name + " 2q " + ts.sorted.apply(ts.size / 2))
+          println("random " + name + " 1q" + ts.sorted.apply((ts.size * 0.25).toInt))
+          println("random " + name + " 3q" + ts.sorted.apply((ts.size * 0.75).toInt))
+          println("random " + name + " min" + ts.min)
+          println("random " + name + " max" + ts.zipWithIndex.maxBy(_._1))
+        }
         CTrie.query(ns2, "abc".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "c".getBytes("US-ASCII")) should equal(None)
         CTrie.query(ns2, "aaa".getBytes("US-ASCII")) should equal(None)
@@ -419,9 +436,9 @@ class TrieSpec extends FunSpec with Matchers {
             CTrie.prefixPayload(ns4, k) should equal(Vector(v))
             (System.nanoTime - t1) / 1E9
         }.toVector
-        println("random " + name + " 2q" + ts2.sorted.apply(ts.size / 2))
-        println("random " + name + " 1q" + ts2.sorted.apply((ts.size * 0.25).toInt))
-        println("random " + name + " 3q" + ts2.sorted.apply((ts.size * 0.75).toInt))
+        println("random " + name + " 2q" + ts2.sorted.apply(ts2.size / 2))
+        println("random " + name + " 1q" + ts2.sorted.apply((ts2.size * 0.25).toInt))
+        println("random " + name + " 3q" + ts2.sorted.apply((ts2.size * 0.75).toInt))
         println("random " + name + " min" + ts2.min)
         println("random " + name + " max" + ts2.zipWithIndex.maxBy(_._1))
         println("random " + name + " random copied: " + tmp2.length / 1024 / 1024)
