@@ -22,7 +22,7 @@ class TrieSpec extends FunSpec with Matchers {
     }
 
     describe("cnode adaptive storage " + name) {
-      ignore("simple") {
+      it("simple") {
         val n1 = CNode(ArrayBuffer(1.toByte -> 13L), 113L, Array[Byte](0, 1)).copy(address = 0L)
         val n2 = CNode(ArrayBuffer(), 114L, Array[Byte](0, 1, 2, 3))
         val s = newstorage()
@@ -45,13 +45,13 @@ class TrieSpec extends FunSpec with Matchers {
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
         ns.updateRoute(n1.address, 2, 3L)
         ns.read(0).get.payload should equal(3L)
-        ns.read(0).get.children should equal(n1.children.updated(2, 3L))
+        ns.read(0).get.children should equal(ArrayBuffer(1.toByte -> 13L, 2.toByte -> 3L))
         ns.read(0).get.prefix.toList should equal(n1.prefix.toList)
 
         0 to 48 map { i =>
           ns.updateRoute(n1.address, i.toByte, i.toLong)
         }
-        ns.read(0).get.children.take(49) should equal(0 to 48 map (x => x.toByte -> x.toLong) toMap)
+        ns.read(0).get.children.take(49).toSet should equal(0 to 48 map (x => x.toByte -> x.toLong) toSet)
         ns.append(ns.read(0).get, 0).children.toVector should equal(ns.read(0).get.children.toVector)
         // ns.read(2056).get should equal(n2)
         // ns.read(2057) should equal(None)
@@ -133,7 +133,7 @@ class TrieSpec extends FunSpec with Matchers {
     }
 
     describe("buffered " + name) {
-      ignore("simple") {
+      it("simple") {
         val n1 = CNode(ArrayBuffer(1.toByte -> 13L), 113L, Array[Byte](0, 1)).copy(address = 0L)
         val n2 = CNode(ArrayBuffer(), 114L, Array[Byte](0, 1, 2, 3))
         val s = newstorage()
@@ -175,34 +175,34 @@ class TrieSpec extends FunSpec with Matchers {
         val s = newstorage()
         val ns = new BufferedCNodeWriter(new CAHNodeWriter(s), 2)
         CTrie.build(data.iterator, ns)
-        // data.foreach {
-        //   case (k, v) =>
-        //     CTrie.query(ns, k) should equal(Some(v))
-        // }
-        // CTrie.query(ns, "abc".getBytes("US-ASCII")) should equal(None)
-        // CTrie.query(ns, "c".getBytes("US-ASCII")) should equal(None)
-        // CTrie.query(ns, "aaaa".getBytes("US-ASCII")) should equal(None)
-        // CTrie.query(ns, "bba".getBytes("US-ASCII")) should equal(None)
-        // CTrie.query(ns, "bbb".getBytes("US-ASCII")) should equal(None)
-        // CTrie.prefixPayload(ns, "a".toVector.map(_.toByte).toArray).toSet should equal(Set(0l, 1L, 3L, 7L, 6L, 5L))
-        // CTrie.prefixPayload(ns, "z".toVector.map(_.toByte).toArray).toSet should equal(Set())
-        // CTrie.prefixPayload(ns, "tes".toVector.map(_.toByte).toArray).toSet should equal(Set(8L, 9L))
-        //
-        // // CTrie.traverse(ns).toList.map(x => new String(x.prefix.map(_.toChar))) should equal(List("", "a", "b", "t", "a", "b", "b", "e", "oast", "a", "a", "b", "am", "st", "er"))
-        //
-        // val s2 = newstorage()
-        // val ns2 = new BufferedCNodeWriter(new CAHNodeWriter(s2), 2)
-        // CTrie.copy(ns, ns2)
-        // data.foreach {
-        //   case (k, v) =>
-        //     CTrie.query(ns2, k) should equal(Some(v))
-        // }
+        data.foreach {
+          case (k, v) =>
+            CTrie.query(ns, k) should equal(Some(v))
+        }
+        CTrie.query(ns, "abc".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "c".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "aaaa".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "bba".getBytes("US-ASCII")) should equal(None)
+        CTrie.query(ns, "bbb".getBytes("US-ASCII")) should equal(None)
+        CTrie.prefixPayload(ns, "a".toVector.map(_.toByte).toArray).toSet should equal(Set(0l, 1L, 3L, 7L, 6L, 5L))
+        CTrie.prefixPayload(ns, "z".toVector.map(_.toByte).toArray).toSet should equal(Set())
+        CTrie.prefixPayload(ns, "tes".toVector.map(_.toByte).toArray).toSet should equal(Set(8L, 9L))
+
+        // CTrie.traverse(ns).toList.map(x => new String(x.prefix.map(_.toChar))) should equal(List("", "a", "b", "t", "a", "b", "b", "e", "oast", "a", "a", "b", "am", "st", "er"))
+
+        val s2 = newstorage()
+        val ns2 = new BufferedCNodeWriter(new CAHNodeWriter(s2), 2)
+        CTrie.copy(ns, ns2)
+        data.foreach {
+          case (k, v) =>
+            CTrie.query(ns2, k) should equal(Some(v))
+        }
 
       }
     }
 
     describe("catrie " + name) {
-      ignore("write+query small") {
+      it("write+query small") {
         val data = List("aaa" -> 0L, "a" -> 1L, "aa" -> 3L, "b" -> 2L, "bb" -> 4L, "ab" -> 5L, "aba" -> 6L, "abb" -> 7L, "tester" -> 8L, "test" -> 9L, "team" -> 10L, "toast" -> 11L)
           .map(x => x._1.getBytes("US-ASCII") -> x._2)
         val s = newstorage()
@@ -236,7 +236,7 @@ class TrieSpec extends FunSpec with Matchers {
     }
 
     describe("cahtrie " + name) {
-      ignore("write+query small") {
+      it("write+query small") {
         val data = List("aaa" -> 0L, "a" -> 1L, "aa" -> 3L, "b" -> 2L, "bb" -> 4L, "ab" -> 5L, "aba" -> 6L, "abb" -> 7L, "tester" -> 8L, "test" -> 9L, "team" -> 10L, "toast" -> 11L)
           .map(x => x._1.getBytes("US-ASCII") -> x._2)
         val s = newstorage()
@@ -286,7 +286,7 @@ class TrieSpec extends FunSpec with Matchers {
   def bigTest(dataSize: Int, openWriter: (File) => Writer, openReader: File => Reader, name: String, openNodeWriter: Writer => CNodeWriter, openNodeReader: Reader => CNodeReader) = {
     describe("big " + dataSize) {
 
-      ignore("digits " + name) {
+      it("digits " + name) {
 
         val buf = Array.ofDim[Byte](50)
         val data = (0 until dataSize)
@@ -374,7 +374,9 @@ class TrieSpec extends FunSpec with Matchers {
         val t1 = System.nanoTime
         CTrie.build(data, ns)
         ns match {
-          case x: BufferedCNodeReader => println(x.inmemory2.size)
+          case x: BufferedCNodeReader =>
+            println(x.inmemory2.size)
+          case x => ()
         }
         s.close
         println("random " + name + " build time " + (System.nanoTime - t1) / 1E9)
@@ -465,15 +467,15 @@ class TrieSpec extends FunSpec with Matchers {
   //   (s: Reader) => new CAHNodeReader(s)
   // )
   //
-  // val inmemory = new InMemoryStorage
-  // bigTest(
-  //   100000,
-  //   (f: File) => inmemory,
-  //   (f: File) => inmemory,
-  //   "inmemory-caH",
-  //   (s: Writer) => new CAHNodeWriter(s),
-  //   (s: Reader) => new CAHNodeReader(s)
-  // )
+  val inmemory = new InMemoryStorage
+  bigTest(
+    100000,
+    (f: File) => inmemory,
+    (f: File) => inmemory,
+    "inmemory-caH",
+    (s: Writer) => new CAHNodeWriter(s),
+    (s: Reader) => new CAHNodeReader(s)
+  )
 
   bigTest(
     1000000,
