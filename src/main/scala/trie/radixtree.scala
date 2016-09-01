@@ -32,6 +32,9 @@ trait CNodeReader {
   var counter: Array[Int] = Array.fill(1000)(0)
   var hitcount = 0
   var hitmiss = 0
+
+  var querycount = 0L
+  var querytimer = 0L
 }
 
 trait CNodeWriter extends CNodeReader {
@@ -188,15 +191,19 @@ object CTrie {
   }
 
   def queryNode(trie: CNodeReader, q: Array[Byte]): Either[(Long, Int, Array[Byte]), (Long, Int, Long)] = {
-
+    trie.querycount += 1
+    val t1 = System.nanoTime
     val (p2, off2) = trie.readPartial(0, trie.prefixBuffer, 0, 0)
     val root = 0
     val (lastNodeAddress, prefix, prefixLen, succ, level) = loop(trie, root, p2, 0, off2, q, 0)
+    trie.querytimer += (System.nanoTime - t1)
     trie.counter(level) += 1
-    if (succ) Right((lastNodeAddress, level, trie.readPayload(lastNodeAddress, level)))
+    val r = if (succ) Right((lastNodeAddress, level, trie.readPayload(lastNodeAddress, level)))
     else {
       Left((lastNodeAddress, level, prefix.slice(0, prefixLen)))
     }
+
+    r
 
   }
 

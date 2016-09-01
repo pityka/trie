@@ -13,6 +13,7 @@ class CAHNodeReader(backing: Reader) extends CNodeReader {
   val tableBuffer = Array.ofDim[Byte](128)
   val pointerBuffer = Array.ofDim[Byte](64)
   val nodeSmallBuffer = Array.ofDim[Byte](19)
+  val buf128 = Array.ofDim[Byte](128)
 
   val ShortNode = 0.toByte
   val HashNode = 1.toByte

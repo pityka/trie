@@ -304,6 +304,11 @@ class TrieSpec extends FunSpec with Matchers {
         CTrie.build(data1.iterator, ns)
         s.close
         println("digits " + name + " build time " + (System.nanoTime - t1) / 1E9)
+        println("digits " + name + " level stat" + ns.counter.zipWithIndex.filter(_._1 > 0).sortBy(_._1).toList)
+
+        println("digits " + name + "hit rate " + ns.hitcount.toDouble / (ns.hitmiss + ns.hitcount))
+        println("digits " + name + "mean insert ns " + ns.inserttimer.toDouble / ns.insertcount)
+        println("digits " + name + "mean query ns " + ns.querytimer.toDouble / ns.querycount)
 
         val s2 = openReader(tmp) //FileReader.open(tmp)
         val ns2 = openNodeReader(s2)
@@ -380,9 +385,10 @@ class TrieSpec extends FunSpec with Matchers {
         }
         s.close
         println("random " + name + " build time " + (System.nanoTime - t1) / 1E9)
-        println("level stat" + ns.counter.zipWithIndex.filter(_._1 > 0).sortBy(_._1).toList)
-        println("hit rate " + ns.hitcount.toDouble / (ns.hitmiss + ns.hitcount))
-        println("mean insert ns " + ns.inserttimer.toDouble / ns.insertcount)
+        println("random " + name + "level stat" + ns.counter.zipWithIndex.filter(_._1 > 0).sortBy(_._1).toList)
+        println("random " + name + "hit rate " + ns.hitcount.toDouble / (ns.hitmiss + ns.hitcount))
+        println("random " + name + "mean insert ns " + ns.inserttimer.toDouble / ns.insertcount)
+        println("random " + name + "mean query ns " + ns.querytimer.toDouble / ns.querycount)
         val s2 = openReader(tmp)
         val ns2 = openNodeReader(s2)
 
